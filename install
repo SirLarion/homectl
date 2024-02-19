@@ -1,0 +1,17 @@
+#!/bin/bash
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+cd $SCRIPT_DIR
+pwd
+
+echo "Building homectl..."
+if cargo build --release ; then
+  echo "Build complete!"
+  echo "Installing..."
+  if sudo mv target/release/homectl /usr/bin/. ; then
+    echo "Installation complete!"
+  else
+    echo "Installation failed!"
+  fi
+fi

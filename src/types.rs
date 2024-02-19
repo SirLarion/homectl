@@ -5,15 +5,24 @@ use clap::{Parser, Subcommand};
 #[command(next_line_help = true)]
 pub struct Cli {
   #[command(subcommand)]
-  service: Option<Service> 
+  pub service: Option<Service> ,
+
+  /// Run command verbosely
+  #[arg(long, default_value_t = false)]
+  pub verbose: bool,
+
+  /// Turn debugging information on
+  #[arg(short, long, default_value_t = false)]
+  pub debug: bool,
+
 }
 
 #[derive(Subcommand)]
-enum Service {
+pub enum Service {
   /// operate on a Minecraft server
   Minecraft {
     /// the selected server instance
-    target: String, 
+    target: Option<String>, 
 
     #[command(subcommand)]
     operation: Option<Operation>
@@ -26,8 +35,10 @@ enum Service {
 }
 
 #[derive(Subcommand)]
-enum Operation {
+pub enum Operation {
+  Init,
   Start,
   Stop,
   Restart,
+  Status
 }

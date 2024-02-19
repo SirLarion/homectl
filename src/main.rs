@@ -1,9 +1,34 @@
 use clap::Parser;
+use nix::unistd::Uid;
 
+mod logger;
 mod types;
-use types::*;
+mod error;
+mod services;
+mod util;
 
-fn main() {
-  let Cli { .. } = Cli::parse();
-  println!("Hello, world!");
+use types::{Cli, Service::*};
+use error::*;
+use logger::*;
+
+fn main() -> Result<(), AppError> {
+  let Cli { service, verbose, debug } = Cli::parse();
+  let _ = logger::init(LoggerFlags { verbose, debug });
+
+  if !debug && !Uid::effective().is_root() {
+    return Err(
+      AppError::AclError(
+        "You cannot perform this operation unless you are root.".into()
+    ))
+  }
+
+  match service {
+    Some(Minecraft { operation, target }) => {
+      services::minecraft::run_service(operation, target)?
+    }
+    Some(Git { .. }) => {},
+    None => {}
+  }
+
+  Ok(())
 }
