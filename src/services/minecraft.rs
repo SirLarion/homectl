@@ -1,6 +1,5 @@
-use std::fs;
+use std::{fs, env, path::Path};
 use std::process::Command;
-use std::path::Path;
 
 use crate::error::AppError;
 use crate::types::Operation;
@@ -20,7 +19,6 @@ fn assert_service_installed() -> Result<(), AppError> {
 
   Ok(())
 }
-
 
 fn assert_target_exists(target: &String) -> Result<(), AppError> {
   if !Path::new(&format!("{MC_USER_DIR}/{target}")).is_dir() {
@@ -71,7 +69,28 @@ fn disable_instance(target: &String) -> Result<(), AppError> {
 
 fn get_enabled_instance() -> Result<String, AppError> {
   let instance = fs::read_to_string(ENABLED_INSTANCE_FILE)?;
+  if instance.is_empty() {
+    return Err(AppError::ServiceError("no service enabled.".into()));
+  }
   Ok(instance)
+}
+
+fn get_target_or_enabled(target: Option<String>) -> Result<String, AppError> {
+  match target {
+    Some(t) => Ok(t),
+    None    => get_enabled_instance()
+  }
+}
+
+fn get_backup_dir() -> Result<String, AppError> {
+  let sudo_user_var = env::var("SUDO_USER");
+  let backup_dir_var = env::var("BACKUP_DIR");
+
+  match (sudo_user_var, backup_dir_var) {
+    (_, Ok(bak_dir)) => Ok(format!("{bak_dir}/minecraft")),
+    (Ok(user), _) => Ok(format!("/home/{user}/minecraft")),
+    _ => Err(AppError::ServiceError("backup directory not defined.".into())),
+  }
 }
 
 fn init(target: String) -> Result<(), AppError> {
@@ -87,35 +106,40 @@ fn start(target: String) -> Result<(), AppError> {
 }
 
 fn stop(target: Option<String>) -> Result<(), AppError> {
-  let target = match target {
-    Some(t) => t,
-    None    => get_enabled_instance()?
-  };
+  let target = get_target_or_enabled(target)?;
   assert_target_exists(&target)?;
+
   disable_instance(&target).and_then(|()| {
     run_systemctl("stop", &target)
   })
 }
 
 fn restart(target: Option<String>) -> Result<(), AppError> {
-  let target = match target {
-    Some(t) => t,
-    None    => get_enabled_instance()?
-  };
+  let target = get_target_or_enabled(target)?;
   assert_target_exists(&target)?;
 
   run_systemctl("restart", &target)
 }
 
 fn status(target: Option<String>) -> Result<(), AppError> {
-  let target = match target {
-    Some(t) => t,
-    None    => get_enabled_instance()?
-  };
+  let target = get_target_or_enabled(target)?;
   assert_target_exists(&target)?;
+
   run_systemctl("status", &target)
 }
 
+fn backup(target: Option<String>) -> Result<(), AppError> {
+  let target = get_target_or_enabled(target)?;
+  assert_target_exists(&target)?; 
+
+  let dir = get_backup_dir()?;
+
+  Command::new("cp")
+    .args(["-rf", format!("{MC_USER_DIR}/{target}").as_str(), dir.as_str()])
+    .output()?;
+
+  Ok(())
+}
 
 pub fn run_service(operation: Option<Operation>, target: Option<String>) -> Result<(), AppError> {
   assert_service_installed()?;
@@ -129,6 +153,7 @@ pub fn run_service(operation: Option<Operation>, target: Option<String>) -> Resu
     (Some(Operation::Stop),    _)       => stop(target)?,
     (Some(Operation::Restart), _)       => restart(target)?,
     (Some(Operation::Status),  _)       => status(target)?,
+    (Some(Operation::Backup),  _)       => backup(target)?,
     _ => {}
   }
 

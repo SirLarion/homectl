@@ -40,5 +40,6 @@ pub enum Operation {
   Start,
   Stop,
   Restart,
-  Status
+  Status,
+  Backup
 }
