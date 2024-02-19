@@ -10,6 +10,9 @@ pub enum AppError {
   #[error(transparent)]
   EnvError(#[from] env::VarError),
 
+  #[error(transparent)]
+  HTTPError(#[from] reqwest::Error),
+
   #[error("incorrect rights for the requested operation")]
   AclError(String),
 

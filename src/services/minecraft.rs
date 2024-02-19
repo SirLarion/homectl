@@ -2,11 +2,49 @@ use std::{fs, env, path::Path};
 use std::process::Command;
 
 use log::info;
+use serde::{Deserialize, Deserializer};
 
 use crate::error::AppError;
 use crate::types::Operation;
 use crate::util::SYSTEMCTL_OPERATIONS;
 
+
+#[derive(Deserialize, Debug)]
+struct MCDownloadsIndex {
+    #[serde(rename = "downloads", deserialize_with = "lift_nested_server_info")]
+    url_and_sha: (String, String),
+}
+
+fn lift_nested_server_info<'de, D>(deserializer: D) -> Result<(String, String), D::Error>
+    where D: Deserializer<'de>
+{
+  #[derive(Deserialize)]
+  struct Downloads {
+    server: Server,
+  }
+  #[derive(Deserialize)]
+  struct Server {
+    sha1: String,
+    url: String
+  }
+
+  Downloads::deserialize(deserializer).map(|dl| { let s = dl.server; (s.url, s.sha1)})
+}
+
+#[derive(Deserialize, Debug)]
+struct MCVersion {
+  #[serde(rename = "type")]
+  kind: String,
+  url: String,
+
+} 
+
+#[derive(Deserialize, Debug)]
+struct MCVersionManifest {
+  versions: Vec<MCVersion>
+}
+
+const MC_MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 const MC_USER_DIR: &str = "/opt/minecraft";
 const ENABLED_INSTANCE_FILE: &str = "/opt/minecraft/enabled";
 
@@ -95,8 +133,73 @@ fn get_backup_dir() -> Result<String, AppError> {
   }
 }
 
+fn download_mc_server() -> Result<(), AppError> {
+  println!("Downloading server.jar...");
+
+  let manifest = reqwest::blocking::get(MC_MANIFEST_URL)?
+    .json::<MCVersionManifest>()?;
+
+  let Some(version_url) = manifest.versions.into_iter().find(|mcv| {
+    mcv.kind == "release"
+  }).map(|mcv| { mcv.url }) else {
+    Err(AppError::ServiceError("no stable release of Minecraft found.".into()))?
+  };
+
+  let (url, sha) = reqwest::blocking::get(version_url)?
+    .json::<MCDownloadsIndex>()?.url_and_sha;
+
+  println!("this may take a while.");
+  Command::new("wget")
+    .arg(url)
+    .status()?;
+
+  println!("Verifying server.jar integrity");
+  let sha_bytes = Command::new("sha1sum")
+    .arg("server.jar")
+    .output()?.stdout;
+
+  let sha_output = String::from_utf8_lossy(&sha_bytes);
+  let server_sha = sha_output.split(" ").next();
+
+  if server_sha != Some(&sha) {
+    fs::remove_file("server.jar")?;
+    Err(AppError::ServiceError("server.jar SHA checksum could not be verified.".into()))?
+  }
+
+  Ok(())
+}
+
 fn init(target: String) -> Result<(), AppError> {
-  println!("{target}");
+  let Err(_) = assert_target_exists(&target) else {
+    Err(AppError::ServiceError(format!("initialization failed: {target} already exists")))?
+  };
+
+  println!("Creating {target}...");
+  env::set_current_dir(MC_USER_DIR)?;
+  Command::new("cp")
+    .args(["-rf", "template", &target])
+    .status()?;
+
+  env::set_current_dir(format!("{MC_USER_DIR}/{target}"))?;
+
+  if let Err(e) = download_mc_server() {
+    println!("Download failed. Cleaning up...");
+    fs::remove_dir_all(&target)?;
+    Err(e)?
+  };
+
+  println!("Finalizing...");
+  env::set_current_dir(MC_USER_DIR)?;
+
+  Command::new("chown")
+    .args(["-R", "minecraft", &target])
+    .status()?;
+
+  Command::new("chgrp")
+    .args(["-R", "minecraft", &target])
+    .status()?;
+
+  println!("All done!");
   Ok(())
 }
 
