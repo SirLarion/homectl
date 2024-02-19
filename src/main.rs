@@ -23,8 +23,8 @@ fn main() -> Result<(), AppError> {
   }
 
   match service {
-    Some(Minecraft { operation, target }) => {
-      services::minecraft::run_service(operation, target)?
+    Some(Minecraft { operation }) => {
+      services::minecraft::run_service(operation)?
     }
     Some(Git { .. }) => {},
     None => {}

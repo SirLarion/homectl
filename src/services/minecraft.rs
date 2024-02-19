@@ -141,19 +141,16 @@ fn backup(target: Option<String>) -> Result<(), AppError> {
   Ok(())
 }
 
-pub fn run_service(operation: Option<Operation>, target: Option<String>) -> Result<(), AppError> {
+pub fn run_service(operation: Option<Operation>) -> Result<(), AppError> {
   assert_service_installed()?;
-  let err_not_specified = Err(AppError::ServiceError("target not specified.".to_string()));
 
-  match (operation, target.clone()) {
-    (Some(Operation::Init),    Some(t)) => init(t)?,
-    (Some(Operation::Init),    None)    => err_not_specified?,
-    (Some(Operation::Start),   Some(t)) => start(t)?,
-    (Some(Operation::Start),   None)    => err_not_specified?,
-    (Some(Operation::Stop),    _)       => stop(target)?,
-    (Some(Operation::Restart), _)       => restart(target)?,
-    (Some(Operation::Status),  _)       => status(target)?,
-    (Some(Operation::Backup),  _)       => backup(target)?,
+  match operation {
+    Some(Operation::Init { target })    => init(target)?,
+    Some(Operation::Start { target })   => start(target)?,
+    Some(Operation::Stop { target })    => stop(target)?,
+    Some(Operation::Restart { target }) => restart(target)?,
+    Some(Operation::Status { target })  => status(target)?,
+    Some(Operation::Backup { target })  => backup(target)?,
     _ => {}
   }
 

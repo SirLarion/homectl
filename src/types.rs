@@ -21,25 +21,38 @@ pub struct Cli {
 pub enum Service {
   /// operate on a Minecraft server
   Minecraft {
-    /// the selected server instance
-    target: Option<String>, 
-
     #[command(subcommand)]
-    operation: Option<Operation>
+    operation: Option<Operation>,
+    
   },
   /// operate on the git server
-  Git {
-    #[command(subcommand)]
-    operation: Option<Operation>
-  }
+  Git
 }
 
 #[derive(Subcommand)]
 pub enum Operation {
-  Init,
-  Start,
-  Stop,
-  Restart,
-  Status,
-  Backup
+  Init {
+    /// the selected server instance
+    target: String, 
+  },
+  Start {
+    /// the selected server instance
+    target: String, 
+  },
+  Stop {
+    /// optional targeted server instance
+    target: Option<String>, 
+  },
+  Restart {
+    /// optional targeted server instance
+    target: Option<String>, 
+  },
+  Status {
+    /// optional targeted server instance
+    target: Option<String>, 
+  },
+  Backup {
+    /// optional targeted server instance
+    target: Option<String>, 
+  }
 }
