@@ -1,6 +1,8 @@
 use std::{fs, env, path::Path};
 use std::process::Command;
 
+use log::info;
+
 use crate::error::AppError;
 use crate::types::Operation;
 use crate::util::SYSTEMCTL_OPERATIONS;
@@ -39,7 +41,7 @@ fn run_systemctl(op: &str, target: &String) -> Result<(), AppError> {
 
   Command::new("systemctl")
     .args([op, format!("minecraft@{target}").as_str()])
-    .output()?;
+    .status()?;
 
   Ok(())
 }
@@ -100,8 +102,15 @@ fn init(target: String) -> Result<(), AppError> {
 
 fn start(target: String) -> Result<(), AppError> {
   assert_target_exists(&target)?;
+
+  // Stop any current instance
+  let _ = stop(None);
+
   enable_instance(&target).and_then(|()| {
-    run_systemctl("start", &target)
+    run_systemctl("start", &target).and_then(|()| {
+      println!("Starting minecraft@{target}...");
+      Ok(())
+    })
   })
 }
 
@@ -110,7 +119,10 @@ fn stop(target: Option<String>) -> Result<(), AppError> {
   assert_target_exists(&target)?;
 
   disable_instance(&target).and_then(|()| {
-    run_systemctl("stop", &target)
+    run_systemctl("stop", &target).and_then(|()| {
+      println!("Stopping minecraft@{target}...");
+      Ok(())
+    })
   })
 }
 
@@ -118,7 +130,10 @@ fn restart(target: Option<String>) -> Result<(), AppError> {
   let target = get_target_or_enabled(target)?;
   assert_target_exists(&target)?;
 
-  run_systemctl("restart", &target)
+  run_systemctl("restart", &target).and_then(|()| {
+    println!("Restarting minecraft@{target}...");
+    Ok(())
+  })
 }
 
 fn status(target: Option<String>) -> Result<(), AppError> {
@@ -133,6 +148,8 @@ fn backup(target: Option<String>) -> Result<(), AppError> {
   assert_target_exists(&target)?; 
 
   let dir = get_backup_dir()?;
+
+  info!("Backing up {MC_USER_DIR}/{target} to {dir}");
 
   Command::new("cp")
     .args(["-rf", format!("{MC_USER_DIR}/{target}").as_str(), dir.as_str()])

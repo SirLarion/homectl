@@ -32,27 +32,21 @@ pub enum Service {
 #[derive(Subcommand)]
 pub enum Operation {
   Init {
-    /// the selected server instance
     target: String, 
   },
   Start {
-    /// the selected server instance
     target: String, 
   },
   Stop {
-    /// optional targeted server instance
     target: Option<String>, 
   },
   Restart {
-    /// optional targeted server instance
     target: Option<String>, 
   },
   Status {
-    /// optional targeted server instance
     target: Option<String>, 
   },
   Backup {
-    /// optional targeted server instance
     target: Option<String>, 
   }
 }
