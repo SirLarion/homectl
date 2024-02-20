@@ -48,5 +48,8 @@ pub enum Operation {
   },
   Backup {
     target: Option<String>, 
+  },
+  Update {
+    target: Option<String>, 
   }
 }
