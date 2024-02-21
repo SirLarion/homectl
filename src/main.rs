@@ -26,7 +26,9 @@ fn main() -> Result<(), AppError> {
     Some(Minecraft { operation }) => {
       services::minecraft::run_service(operation)?
     }
-    Some(Git { .. }) => {},
+    Some(Git { operation }) => {
+      services::git::run_service(operation)?
+    },
     None => {}
   }
 

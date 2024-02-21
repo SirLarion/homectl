@@ -2,12 +2,37 @@ use std::{fs, env};
 use std::process::Command;
 
 use log::info;
+use clap::Subcommand;
 
 use crate::error::AppError;
-use crate::types::Operation;
 
 mod util;
 use util::*; 
+
+#[derive(Subcommand)]
+pub enum Operation {
+  Init {
+    target: String, 
+  },
+  Start {
+    target: String, 
+  },
+  Stop {
+    target: Option<String>, 
+  },
+  Restart {
+    target: Option<String>, 
+  },
+  Status {
+    target: Option<String>, 
+  },
+  Backup {
+    target: Option<String>, 
+  },
+  Update {
+    target: Option<String>, 
+  }
+}
 
 // ------------------------------
 fn init(target: String) -> Result<(), AppError> {

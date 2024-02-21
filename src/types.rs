@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
 
+use crate::services::{minecraft, git};
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(next_line_help = true)]
@@ -22,34 +24,12 @@ pub enum Service {
   /// operate on a Minecraft server
   Minecraft {
     #[command(subcommand)]
-    operation: Option<Operation>,
+    operation: Option<minecraft::Operation>,
     
   },
   /// operate on the git server
-  Git
-}
-
-#[derive(Subcommand)]
-pub enum Operation {
-  Init {
-    target: String, 
-  },
-  Start {
-    target: String, 
-  },
-  Stop {
-    target: Option<String>, 
-  },
-  Restart {
-    target: Option<String>, 
-  },
-  Status {
-    target: Option<String>, 
-  },
-  Backup {
-    target: Option<String>, 
-  },
-  Update {
-    target: Option<String>, 
+  Git {
+    #[command(subcommand)]
+    operation: Option<git::Operation>
   }
 }
