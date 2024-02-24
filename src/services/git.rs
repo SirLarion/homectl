@@ -12,25 +12,19 @@ pub enum Operation {
   },
   Migrate {
     target: String, 
+  },
+  Mirror {
+    target: String
   }
-}
-
-fn init(target: String) -> Result<(), AppError> {
-  println!("{target}");
-  Ok(())
-}
-
-fn migrate(target: String) -> Result<(), AppError> {
-  println!("{target}");
-  Ok(())
 }
 
 pub fn run_service(operation: Option<Operation>) -> Result<(), AppError> {
   assert_service_installed()?;
 
   match operation {
-    Some(Operation::Init { target })    => init(target)?,
-    Some(Operation::Migrate { target }) => migrate(target)?,
+    Some(Operation::Init { target })    => make_bare_repository(target)?,
+    Some(Operation::Migrate { target }) => clone_mirror_repository(target)?,
+    Some(Operation::Mirror { target }) => push_mirror_repository(target)?,
     _ => {}
   }
 

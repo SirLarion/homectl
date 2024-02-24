@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-use crate::services::{minecraft, git};
+use crate::services::{minecraft, git, habitica};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -27,9 +27,16 @@ pub enum Service {
     operation: Option<minecraft::Operation>,
     
   },
+
   /// operate on the git server
   Git {
     #[command(subcommand)]
     operation: Option<git::Operation>
+  },
+
+  /// operate on Habitica functions
+  Habitica {
+    #[command(subcommand)]
+    operation: Option<habitica::Operation>
   }
 }
