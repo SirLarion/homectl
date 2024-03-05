@@ -3,12 +3,14 @@ use std::process::Command;
 
 use crate::error::AppError;
 
+const GIT_BASE_PATH: &str = "/srv/git";
+
 pub fn assert_service_installed() -> Result<(), AppError> {
   // Check that env vars are loaded
   env::var("FORGE_REMOTE")?;
   env::var("GH_REMOTE")?;
 
-  if !Path::new("/srv/git").is_dir() {
+  if !Path::new(GIT_BASE_PATH).is_dir() {
     Err(AppError::ServiceError("git root directory not found.".into()))?
   }
 
@@ -23,7 +25,7 @@ pub fn assert_service_installed() -> Result<(), AppError> {
   Err(AppError::ServiceError("invalid git user.".into()))
 }
 
-fn chown_repo(target: &String)-> Result<(), AppError> {
+fn chown_repo(target: &String) -> Result<(), AppError> {
   Command::new("chown")
     .args(["-R", "git:git", &target])
     .status()?;
@@ -33,9 +35,10 @@ fn chown_repo(target: &String)-> Result<(), AppError> {
 
 
 pub fn make_bare_repository(target: String) -> Result<(), AppError> {
-  if Path::new(format!("/srv/git/{target}").as_str()).is_dir() {
+  if Path::new(format!("{GIT_BASE_PATH}/{target}").as_str()).is_dir() {
     Err(AppError::ServiceError(format!("{target} already exists.")))?
   }
+  env::set_current_dir(GIT_BASE_PATH)?;
 
   Command::new("git")
     .args(["init", "--bare", &target])
@@ -47,9 +50,10 @@ pub fn make_bare_repository(target: String) -> Result<(), AppError> {
 }
 
 pub fn clone_mirror_repository(target: String) -> Result<(), AppError> {
-  if Path::new(format!("/srv/git/{target}").as_str()).is_dir() {
+  if Path::new(format!("{GIT_BASE_PATH}/{target}").as_str()).is_dir() {
     Err(AppError::ServiceError(format!("{target} already exists.")))?
   }
+  env::set_current_dir(GIT_BASE_PATH)?;
 
   Command::new("git")
     .args(["clone", "--mirror", &target])
@@ -61,9 +65,11 @@ pub fn clone_mirror_repository(target: String) -> Result<(), AppError> {
 }
 
 pub fn push_mirror_repository(target: String) -> Result<(), AppError> {
-  if !Path::new(format!("/srv/git/{target}").as_str()).is_dir() {
+  let repo = format!("{GIT_BASE_PATH}/{target}");
+  if !Path::new(repo.as_str()).is_dir() {
     Err(AppError::ServiceError(format!("{target} does not exist.")))?
   }
+  env::set_current_dir(repo)?;
 
   let forge_remote = env::var("FORGE_REMOTE")?;
   let gh_remote = env::var("GH_REMOTE")?;
