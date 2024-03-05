@@ -13,6 +13,12 @@ pub enum AppError {
   #[error(transparent)]
   HTTPError(#[from] reqwest::Error),
 
+  #[error(transparent)]
+  SerdeError(#[from] serde_json::Error),
+
+  #[error(transparent)]
+  HeaderError(#[from] reqwest::header::InvalidHeaderValue),
+
   #[error("incorrect rights for the requested operation")]
   AclError(String),
 

@@ -1,5 +1,6 @@
+use std::env;
+
 use clap::Parser;
-use nix::unistd::Uid;
 
 mod logger;
 mod types;
@@ -10,25 +11,28 @@ mod util;
 use types::{Cli, Service::*};
 use error::*;
 use logger::*;
+use util::assert_root;
 
 fn main() -> Result<(), AppError> {
   let Cli { service, verbose, debug } = Cli::parse();
   let _ = logger::init(LoggerFlags { verbose, debug });
 
-  if !debug && !Uid::effective().is_root() {
-    return Err(
-      AppError::AclError(
-        "You cannot perform this operation unless you are root.".into()
-    ))
+  if debug {
+    env::set_var("HOMECTL_DEBUG", "true");
   }
 
   match service {
     Some(Minecraft { operation }) => {
+      assert_root()?;
       services::minecraft::run_service(operation)?
     }
     Some(Git { operation }) => {
+      assert_root()?;
       services::git::run_service(operation)?
     },
+    Some(Habitica { operation }) => {
+      services::habitica::run_service(operation)?
+    }
     None => {}
   }
 
