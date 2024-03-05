@@ -2,7 +2,6 @@ use std::{fmt, env};
 
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use reqwest::blocking as req;
-use dotenv::dotenv;
 use serde::Deserialize;
 
 use crate::error::AppError;
@@ -25,28 +24,7 @@ struct ArrayRes<T> {
   data: Vec<T>,
 }
 
-const HABITICA_CONFIG_DIR: &str = ".config/habitica";
 const HABITICA_API_ENDPOINT: &str = "https://habitica.com/api/v3";
-
-fn get_habitica_env() -> Result<(), AppError> {
-  let sudo_user_var = env::var("SUDO_USER");
-  let home_var = env::var("HOME");
-  let dir: String;
-
-  match (sudo_user_var, home_var) {
-    (Ok(user), _) => dir = format!("/home/{user}/{HABITICA_CONFIG_DIR}"),
-    (_, Ok(home)) => dir = format!("{home}/{HABITICA_CONFIG_DIR}"),
-    (Err(_), Err(e)) => return Err(e.into()),
-  }
-
-  // Go to config dir and pull .env contents
-  if let Err(_) = env::set_current_dir(dir) {
-    return Err(AppError::ServiceError("$HOME/.config/habitica not found".to_string()));
-  }
-
-  dotenv().ok();
-  Ok(())
-}
 
 fn get_env_vars() -> Result<(String, String, String), AppError> {
   Ok((
@@ -69,8 +47,6 @@ fn get_headers() -> Result<HeaderMap, AppError> {
 }
 
 pub fn assert_service_installed() -> Result<(), AppError> {
-  get_habitica_env()?;
-
   // Test that env was loaded correctly
   get_env_vars()?;
 

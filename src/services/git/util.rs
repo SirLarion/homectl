@@ -4,6 +4,10 @@ use std::process::Command;
 use crate::error::AppError;
 
 pub fn assert_service_installed() -> Result<(), AppError> {
+  // Check that env vars are loaded
+  env::var("FORGE_REMOTE")?;
+  env::var("GH_REMOTE")?;
+
   if !Path::new("/srv/git").is_dir() {
     Err(AppError::ServiceError("git root directory not found.".into()))?
   }
@@ -60,17 +64,18 @@ pub fn push_mirror_repository(target: String) -> Result<(), AppError> {
   if !Path::new(format!("/srv/git/{target}").as_str()).is_dir() {
     Err(AppError::ServiceError(format!("{target} does not exist.")))?
   }
-  let forge_url = env::var("FORGE_URL")?;
-  let gh_url = env::var("GH_URL")?;
+
+  let forge_remote = env::var("FORGE_REMOTE")?;
+  let gh_remote = env::var("GH_REMOTE")?;
 
   // Push to Forgejo
   Command::new("git")
-    .args(["push", "--mirror", &target, forge_url.as_str()])
+    .args(["push", "--mirror", format!("{}/{}.git", forge_remote, target).as_str()])
     .status()?;
 
   // Push to GH
   Command::new("git")
-    .args(["push", "--mirror", &target, gh_url.as_str()])
+    .args(["push", "--mirror", format!("{}/{}.git", gh_remote, target).as_str()])
     .status()?;
 
 

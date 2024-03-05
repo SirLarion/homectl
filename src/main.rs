@@ -11,7 +11,7 @@ mod util;
 use types::{Cli, Service::*};
 use error::*;
 use logger::*;
-use util::assert_root;
+use util::{assert_root, load_env};
 
 fn main() -> Result<(), AppError> {
   let Cli { service, verbose, debug } = Cli::parse();
@@ -20,6 +20,8 @@ fn main() -> Result<(), AppError> {
   if debug {
     env::set_var("HOMECTL_DEBUG", "true");
   }
+
+  load_env()?;
 
   match service {
     Some(Minecraft { operation }) => {

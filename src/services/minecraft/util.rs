@@ -42,8 +42,8 @@ struct MCVersionManifest {
 }
 
 const MC_MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
-const ENABLED_INSTANCE_FILE: &str = "/opt/minecraft/enabled";
-pub const MC_USER_DIR: &str = "/opt/minecraft";
+const ENABLED_INSTANCE_FILE: &str = "/home/minecraft/enabled";
+pub const MC_USER_DIR: &str = "/home/minecraft";
 
 pub fn assert_service_installed() -> Result<(), AppError> {
   if !Path::new(&format!("/etc/systemd/system/minecraft@.service")).is_file() {
