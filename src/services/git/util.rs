@@ -49,14 +49,19 @@ pub fn make_bare_repository(target: String) -> Result<(), AppError> {
   Ok(())
 }
 
-pub fn clone_mirror_repository(target: String) -> Result<(), AppError> {
+pub fn clone_mirror_repository(remote_target: String) -> Result<(), AppError> {
+  // Parse <repo>.git from remote
+  let Some(target) = remote_target.clone().split("/").last().map(|s| s.to_string()) else {
+    Err(AppError::ServiceError(format!("Invalid remote_target: {remote_target}")))?
+  };
+
   if Path::new(format!("{GIT_BASE_PATH}/{target}").as_str()).is_dir() {
     Err(AppError::ServiceError(format!("{target} already exists.")))?
   }
   env::set_current_dir(GIT_BASE_PATH)?;
 
   Command::new("git")
-    .args(["clone", "--mirror", &target])
+    .args(["clone", "--mirror", &remote_target])
     .status()?;
 
   chown_repo(&target)?;
