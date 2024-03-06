@@ -65,7 +65,7 @@ pub fn clone_mirror_repository(target: String) -> Result<(), AppError> {
 }
 
 pub fn push_mirror_repository(target: String) -> Result<(), AppError> {
-  let repo = format!("{GIT_BASE_PATH}/{target}");
+  let repo = format!("{GIT_BASE_PATH}/{target}.git");
   if !Path::new(repo.as_str()).is_dir() {
     Err(AppError::ServiceError(format!("{target} does not exist.")))?
   }
