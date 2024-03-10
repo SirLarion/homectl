@@ -35,13 +35,13 @@ fn chown_repo(target: &String) -> Result<(), AppError> {
 
 
 pub fn make_bare_repository(target: String) -> Result<(), AppError> {
-  if Path::new(format!("{GIT_BASE_PATH}/{target}").as_str()).is_dir() {
+  if Path::new(format!("{GIT_BASE_PATH}/{target}.git").as_str()).is_dir() {
     Err(AppError::ServiceError(format!("{target} already exists.")))?
   }
   env::set_current_dir(GIT_BASE_PATH)?;
 
   Command::new("git")
-    .args(["init", "--bare", &target])
+    .args(["init", "--bare", format!("{target}.git").as_str()])
     .status()?;
   
   chown_repo(&target)?;
