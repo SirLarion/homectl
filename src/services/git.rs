@@ -14,7 +14,7 @@ pub enum Operation {
     target: String, 
   },
   Mirror {
-    target: String
+    target: Option<String>
   }
 }
 
