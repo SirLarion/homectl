@@ -3,7 +3,14 @@ use std::env;
 use nix::unistd::Uid;
 use dotenv::dotenv;
 
-use crate::error::AppError;
+use crate::{error::AppError, types::Service};
+
+#[cfg(feature = "minecraft")]
+use Service::Minecraft;
+#[cfg(feature = "git")]
+use Service::Git;
+#[cfg(feature = "habitica")]
+use Service::Habitica;
 
 
 pub const SYSTEMCTL_OPERATIONS: [&str; 6] = ["start", "stop", "restart", "enable", "disable", "status"];
@@ -30,15 +37,40 @@ pub fn load_env() -> Result<(), AppError> {
   Ok(())
 }
 
-pub fn assert_root() -> Result<(), AppError> {
-  if let Err(_) = env::var("HOMECTL_DEBUG") {
-    if !Uid::effective().is_root() {
-    return Err(
-      AppError::AclError(
-        "You cannot perform this operation unless you are root.".into()
-    ))
-    }
+// Map service to checks for correct access permissions
+pub fn assert_correct_permissions(service: &Service) -> Result<(), AppError> {
+  // Return early if root or debug
+  if Uid::effective().is_root() {
+    return Ok(());
   }
 
-  Ok(())
+  if let Ok(_) = env::var("HOMECTL_DEBUG") {
+    return Ok(());
+  }
+
+  let user = env::var("USER")?;
+  match service {
+    #[cfg(feature = "minecraft")]
+    Minecraft { .. } => {
+      if user == "minecraft" {
+        return Ok(());
+      }
+    },
+
+    #[cfg(feature = "git")]
+    Git { .. } => {
+      if user == "git" {
+        return Ok(());
+      }
+    },
+    
+    #[cfg(feature = "habitica")]
+    Habitica { .. } => {
+      return Ok(());
+    }
+  }
+  Err(
+    AppError::AclError(
+      "Performing operation failed: Unauthorized access".into()
+  ))
 }

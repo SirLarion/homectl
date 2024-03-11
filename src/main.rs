@@ -11,7 +11,7 @@ mod util;
 use types::{Cli, Service::*};
 use error::*;
 use logger::*;
-use util::{assert_root, load_env};
+use util::{load_env, assert_correct_permissions};
 
 fn main() -> Result<(), AppError> {
   let Cli { service, verbose, debug } = Cli::parse();
@@ -24,22 +24,25 @@ fn main() -> Result<(), AppError> {
   load_env()?;
 
   match service {
-    #[cfg(feature = "minecraft")]
-    Some(Minecraft { operation }) => {
-      assert_root()?;
-      services::minecraft::run_service(operation)?
-    }
+    Some(s) => {
+      assert_correct_permissions(&s)?;
+      match s {
+        #[cfg(feature = "minecraft")]
+        Minecraft { operation } => {
+          services::minecraft::run_service(operation)?
+        }
 
-    #[cfg(feature = "git")]
-    Some(Git { operation }) => {
-      assert_root()?;
-      services::git::run_service(operation)?
+        #[cfg(feature = "git")]
+        Git { operation } => {
+          services::git::run_service(operation)?
+        },
+        
+        #[cfg(feature = "habitica")]
+        Habitica { operation } => {
+          services::habitica::run_service(operation)?
+        }
+      }
     },
-    
-    #[cfg(feature = "habitica")]
-    Some(Habitica { operation }) => {
-      services::habitica::run_service(operation)?
-    }
     None => {}
   }
 
