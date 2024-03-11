@@ -1,13 +1,20 @@
 use clap::{Parser, Subcommand};
 
-use crate::services::{minecraft, git, habitica};
+#[cfg(feature = "minecraft")]
+use crate::services::minecraft; 
+
+#[cfg(feature = "git")]
+use crate::services::git;
+
+#[cfg(feature = "habitica")]
+use crate::services::habitica;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(next_line_help = true)]
 pub struct Cli {
   #[command(subcommand)]
-  pub service: Option<Service> ,
+  pub service: Option<Service>,
 
   /// Run command verbosely
   #[arg(long, default_value_t = false)]
@@ -22,6 +29,7 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Service {
   /// operate on a Minecraft server
+  #[cfg(feature = "minecraft")]
   Minecraft {
     #[command(subcommand)]
     operation: Option<minecraft::Operation>,
@@ -29,12 +37,14 @@ pub enum Service {
   },
 
   /// operate on the git server
+  #[cfg(feature = "git")]
   Git {
     #[command(subcommand)]
     operation: Option<git::Operation>
   },
 
   /// operate on Habitica functions
+  #[cfg(feature = "habitica")]
   Habitica {
     #[command(subcommand)]
     operation: Option<habitica::Operation>
