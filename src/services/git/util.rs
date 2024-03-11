@@ -80,7 +80,18 @@ pub fn push_mirror_repository(opt_target: Option<String>) -> Result<(), AppError
     env::set_current_dir(repo)?;
   } 
   else {
-    target = env::current_dir()?.display().to_string();
+    if let Some(t) = env::current_dir()?
+      .display()
+      .to_string()
+      .clone()
+      .split("/")
+      .last().map(|s| s.to_string()) {
+        target = t;
+      }
+    else {
+      // should never end up here
+      target = String::new();
+    }
   }
 
   let forge_remote = env::var("FORGE_REMOTE")?;
