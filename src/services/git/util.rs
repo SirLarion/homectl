@@ -27,7 +27,7 @@ pub fn assert_service_installed() -> Result<(), AppError> {
 
 fn chown_repo(target: &String) -> Result<(), AppError> {
   Command::new("chown")
-    .args(["-R", "git:git", &target])
+    .args(["-R", "git:git", format!("{target}.git").as_str()])
     .status()?;
 
   Ok(())
