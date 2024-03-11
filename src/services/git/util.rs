@@ -41,7 +41,7 @@ pub fn make_bare_repository(target: String) -> Result<(), AppError> {
   env::set_current_dir(GIT_BASE_PATH)?;
 
   Command::new("git")
-    .args(["init", "--bare", format!("{target}.git").as_str()])
+    .args(["init", "--bare", format!("{target}.git").as_str(), "--template", "template"])
     .status()?;
   
   chown_repo(&target)?;
