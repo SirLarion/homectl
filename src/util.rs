@@ -18,6 +18,7 @@ pub const SYSTEMCTL_OPERATIONS: [&str; 6] = ["start", "stop", "restart", "enable
 const HOMECTL_CONFIG_DIR: &str = ".config/homectl";
 
 pub fn load_env() -> Result<(), AppError> {
+  let cwd = env::current_dir()?;
   let sudo_user_var = env::var("SUDO_USER");
   let home_var = env::var("HOME");
   let dir: String;
@@ -34,6 +35,8 @@ pub fn load_env() -> Result<(), AppError> {
   }
 
   dotenv().ok();
+
+  env::set_current_dir(cwd)?;
   Ok(())
 }
 
