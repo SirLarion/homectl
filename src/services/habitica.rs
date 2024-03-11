@@ -2,8 +2,11 @@ use clap::Subcommand;
 
 use crate::error::AppError;
 
-mod util;
+pub mod util;
 use util::*; 
+
+#[cfg(feature = "tui")]
+pub mod tui;
 
 #[derive(Subcommand)]
 pub enum Operation {
@@ -15,8 +18,11 @@ pub fn run_service(operation: Option<Operation>) -> Result<(), AppError> {
   assert_service_installed()?;
 
   match operation {
-    Some(Operation::List)    => list_tasks()?,
-    None => start_interactive()?,
+    Some(Operation::List) => list_tasks()?,
+    None => {
+      #[cfg(feature = "tui")]   
+      start_interactive()?;
+    }
   }
 
   Ok(())

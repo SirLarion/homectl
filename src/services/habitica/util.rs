@@ -6,6 +6,10 @@ use serde::Deserialize;
 
 use crate::error::AppError;
 
+#[cfg(feature = "tui")]
+use crate::services::habitica::tui;
+
+
 #[derive(Deserialize)]
 struct Task {
   text: String,
@@ -53,7 +57,9 @@ pub fn assert_service_installed() -> Result<(), AppError> {
   Ok(())
 }
 
+#[cfg(feature = "tui")]
 pub fn start_interactive() -> Result<(), AppError> {
+  tui::start()?;
   Ok(())
 }
 
