@@ -69,11 +69,11 @@ pub fn clone_mirror_repository(remote_target: String) -> Result<(), AppError> {
   Ok(())
 }
 
-pub fn push_mirror_repository(raw_target: Option<String>) -> Result<(), AppError> {
+pub fn push_mirror_repository(opt_target: Option<String>) -> Result<(), AppError> {
   let target;
-  if raw_target.is_some() {
-    target = raw_target.unwrap();
-    let repo = format!("{GIT_BASE_PATH}/{target}.git");
+  if opt_target.is_some() {
+    target = format!("{}.git", opt_target.unwrap());
+    let repo = format!("{GIT_BASE_PATH}/{target}");
     if !Path::new(repo.as_str()).is_dir() {
       Err(AppError::ServiceError(format!("{target} does not exist.")))?
     }
@@ -88,12 +88,12 @@ pub fn push_mirror_repository(raw_target: Option<String>) -> Result<(), AppError
 
   // Push to Forgejo
   Command::new("git")
-    .args(["push", "--mirror", format!("{}/{}.git", forge_remote, target).as_str()])
+    .args(["push", "--mirror", format!("{}/{}", forge_remote, target).as_str()])
     .status()?;
 
   // Push to GH
   Command::new("git")
-    .args(["push", "--mirror", format!("{}/{}.git", gh_remote, target).as_str()])
+    .args(["push", "--mirror", format!("{}/{}", gh_remote, target).as_str()])
     .status()?;
 
 
