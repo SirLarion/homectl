@@ -1,4 +1,4 @@
-use std::{io, env};
+use std::{io, env, num};
 
 use thiserror::Error;
 
@@ -18,6 +18,12 @@ pub enum AppError {
 
   #[error(transparent)]
   HeaderError(#[from] reqwest::header::InvalidHeaderValue),
+
+  #[error(transparent)]
+  PromptError(#[from] inquire::InquireError),
+
+  #[error(transparent)]
+  ParseFloatError(#[from] num::ParseFloatError),
 
   #[error("incorrect rights for the requested operation")]
   AclError(String),

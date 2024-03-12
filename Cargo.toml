@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 clap = { version = "4.5.1", features = ["derive"] }
-crossterm = { version = "0.27.0", optional = true }
+crossterm = "0.27.0"
 dotenv = "0.15.0"
 itertools = "0.12.1"
 log = { version = "0.4.20", features = ["std"] }
@@ -19,10 +19,11 @@ reqwest = { version = "0.11.24", features = ["blocking", "json"] }
 serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.114"
 thiserror = "1.0.57"
+inquire = { version = "0.7.1", features = ["date"] }
 
 [features]
 default = ["minecraft", "git", "habitica", "tui"]
 minecraft = []
 git = []
 habitica = []
-tui = ["dep:crossterm", "dep:ratatui"]
+tui = ["dep:ratatui"]
