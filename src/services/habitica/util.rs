@@ -1,9 +1,6 @@
-use std::error::Error;
 use std::{fmt, env};
 
-use inquire::list_option::ListOption;
-use inquire::validator::Validation;
-use inquire::{Text, MultiSelect};
+use inquire::{Text, Select, DateSelect, min_length, max_length};
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use reqwest::blocking as req;
@@ -92,28 +89,9 @@ pub fn start_interactive() -> Result<(), AppError> {
   Ok(())
 }
 
-fn prompt_text_validator(input: &str) -> Result<Validation, Box<dyn Error + Send + Sync>> {
-  if input.chars().count() == 0 {
-    Ok(Validation::Invalid("Field cannot be empty.".into()))
-  } else if input.chars().count() > 140 {
-    Ok(Validation::Invalid("You're only allowed 60 characters.".into()))
-  } else {
-    Ok(Validation::Valid)
-  }
-}
 
-fn prompt_multi_validator(selected: &[ListOption<&&str>]) -> Result<Validation, Box<dyn Error + Send + Sync>>  {
-  if selected.len() != 1 {
-    return Ok(Validation::Invalid("Select exactly one of the options.".into()));
-  }
-
-  Ok(Validation::Valid)
-}
-
-fn parse_difficulty(selected: Vec<&str>) -> Result<f32, AppError> {
-  let head = selected[0];
-
-  let parsed: f32 = match head {
+fn parse_difficulty(selected: &str) -> Result<f32, AppError> {
+  let parsed: f32 = match selected {
     "Trivial" => 0.1,
     "Easy" => 1.0,
     "Medium" => 1.5,
@@ -143,23 +121,59 @@ fn parse_task_descriptor(descriptor: String) -> Result<Task, AppError> {
   }
 }
 
+fn checklist_item_formatter(i: &str) -> String { format!("[] {i}")}
+
+fn prompt_for_checklist() -> Result<Option<Vec<SubTask>>, AppError> {
+  let mut list: Vec<SubTask> = Vec::new();
+  let mut finished = false;
+  let mut i = 1;
+
+  while !finished {
+    let item = Text::new(format!("Checlist item #{i}:").as_str())
+      .with_help_message("Press ESC to skip")
+      .with_formatter(&checklist_item_formatter)
+      .prompt_skippable()?;
+
+    if item.is_none() { 
+      finished = true; 
+    } else {
+      list.push(SubTask { text: item.unwrap(), completed: false })
+    }
+
+    i += 1;
+  }
+
+  Ok(if list.is_empty() { None } else { Some(list) })
+}
+
 fn prompt_for_task() -> Result<Task, AppError> {
   let name = Text::new("Task name:")
-    .with_validator(prompt_text_validator)
+    .with_validator(min_length!(1, "Task name cannot be empty."))
+    .with_validator(max_length!(60, "Task name must be at most 60 characters."))
     .prompt()?;
 
-  let difficulty = MultiSelect::new("Difficulty:", vec!["Trivial", "Easy", "Medium", "Hard"])
-    .with_validator(prompt_multi_validator)
+  let difficulty = Select::new("Difficulty:", vec!["Trivial", "Easy", "Medium", "Hard"])
     .with_vim_mode(true)
     .prompt()?;
+
+  let notes = Text::new("Extra notes:")
+    .with_validator(max_length!(60, "Notes must be at most 60 characters."))
+    .prompt()?;
+
+  let date = DateSelect::new("Due date:")
+    .with_help_message("Press ESC to skip")
+    .prompt_skippable()?
+    .map(|d| d.format("%F").to_string());
+
+  let checklist = prompt_for_checklist()?;
 
   Ok(Task {
     text: name,
     task_type: "todo".into(),
     priority: parse_difficulty(difficulty)?,
-    notes: None,
-    date: None,
-    checklist: None,
+    notes: if notes.is_empty() { None } else { Some(notes) },
+    date,
+    checklist,
   })
 }
 
