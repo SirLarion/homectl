@@ -2,11 +2,15 @@
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
+if [[ -n $@ ]]; then
+  args="--no-default-features --features $@"
+fi
+
 cd $SCRIPT_DIR
 pwd
 
 echo "Building homectl..."
-if cargo build --release ; then
+if cargo build --release $args; then
   echo "Build complete!"
   echo "Installing..."
   if sudo mv target/release/homectl /usr/bin/. ; then
