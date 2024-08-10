@@ -74,7 +74,7 @@ impl Widget for &Habitui {
       .borders(Borders::ALL)
       .border_set(border::THICK);
 
-    Paragraph::new("shbubbi")
+    Paragraph::new("bubbi")
       .centered()
       .block(block)
       .render(area, buf);
