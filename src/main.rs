@@ -18,7 +18,7 @@ fn main() -> Result<(), AppError> {
   let _ = logger::init(LoggerFlags { verbose, debug });
 
   if debug {
-    env::set_var("HOMECTL_DEBUG", "true");
+    env::set_var("HUTCTL_DEBUG", "true");
   }
 
   load_env()?;

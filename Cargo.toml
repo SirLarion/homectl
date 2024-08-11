@@ -1,5 +1,5 @@
 [package]
-name = "homectl"
+name = "hutctl"
 authors = ["Miska Tammenpää <miska@tammenpaa.com>"]
 version = "0.1.0"
 edition = "2021"

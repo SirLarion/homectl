@@ -15,7 +15,7 @@ use Service::Habitica;
 
 pub const SYSTEMCTL_OPERATIONS: [&str; 6] = ["start", "stop", "restart", "enable", "disable", "status"];
 
-const HOMECTL_CONFIG_DIR: &str = ".config/homectl";
+const HUTCTL_CONFIG_DIR: &str = ".config/hutctl";
 
 pub fn load_env() -> Result<(), AppError> {
   let cwd = env::current_dir()?;
@@ -24,8 +24,8 @@ pub fn load_env() -> Result<(), AppError> {
   let dir: String;
 
   match (sudo_user_var, home_var) {
-    (Ok(user), _) => dir = format!("/home/{user}/{HOMECTL_CONFIG_DIR}"),
-    (_, Ok(home)) => dir = format!("{home}/{HOMECTL_CONFIG_DIR}"),
+    (Ok(user), _) => dir = format!("/home/{user}/{HUTCTL_CONFIG_DIR}"),
+    (_, Ok(home)) => dir = format!("{home}/{HUTCTL_CONFIG_DIR}"),
     (Err(_), Err(e)) => return Err(e.into()),
   }
 
@@ -47,7 +47,7 @@ pub fn assert_correct_permissions(service: &Service) -> Result<(), AppError> {
     return Ok(());
   }
 
-  if let Ok(_) = env::var("HOMECTL_DEBUG") {
+  if let Ok(_) = env::var("HUTCTL_DEBUG") {
     return Ok(());
   }
 

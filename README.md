@@ -1,4 +1,4 @@
-# homectl
+# hutctl
 Tool for easily controlling home server functionality.
 
 ### Services
