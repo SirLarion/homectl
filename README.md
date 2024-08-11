@@ -1,5 +1,5 @@
 # hutctl
-Tool for easily controlling home server functionality.
+Tools for easily controlling home server functionality.
 
 ### Services
 
@@ -12,3 +12,7 @@ instance can be changed.
 
 Controls activities related to the Git server, such as initializing
 repositories.
+
+#### Habitica
+
+Connects to the [Habitica API](https://habitica.com/apidoc/) and performs basic operations. 
