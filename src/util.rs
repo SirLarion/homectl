@@ -31,7 +31,7 @@ pub fn load_env() -> Result<(), AppError> {
 
   // Go to config dir and pull .env contents
   if let Err(_) = env::set_current_dir(dir) {
-    return Err(AppError::ServiceError("$HOME/.config/homectl not found".to_string()));
+    return Err(AppError::ServiceError("$HOME/.config/hutctl not found".to_string()));
   }
 
   dotenv().ok();
