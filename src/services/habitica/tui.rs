@@ -1,42 +1,50 @@
-use std::io::{stdout, Stdout};
+use std::io::stdout;
 
-use crossterm::{
-  execute, 
-  terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen,
-    LeaveAlternateScreen,
-  },
-};
 use ratatui::prelude::{CrosstermBackend, Terminal};
 
 use crate::error::AppError;
 
-use self::app::Habitui;
+use app::Habitui;
+use event::{EventHandler, Event};
+use tui::Tui;
+use handler::handle_key_events;
 
-mod app;
 
-pub type Tui = Terminal<CrosstermBackend<Stdout>>;
+pub mod app;
+pub mod event;
+pub mod ui;
+pub mod widgets;
+pub mod tui;
+pub mod handler;
+pub mod util;
 
-// Initialize the terminal
-fn init() -> Result<Tui, AppError> {
-    execute!(stdout(), EnterAlternateScreen)?;
-    enable_raw_mode()?;
-    Ok(Terminal::new(CrosstermBackend::new(stdout()))?)
-}
-
-// Restore the terminal to its original state
-fn restore() -> Result<(), AppError> {
-    execute!(stdout(), LeaveAlternateScreen)?;
-    disable_raw_mode()?;
-    Ok(())
-}
 
 // Start interactive Habitui
-pub fn start() -> Result<(), AppError> {
-  let mut terminal = init()?;
+pub async fn run() -> Result<(), AppError> {
+  // Create an application.
+  let mut app = Habitui::default();
 
-  Habitui::default().run(&mut terminal)?;
+  // Initialize the terminal user interface.
+  let events = EventHandler::new(250);
+  let mut tui = Tui::new(Terminal::new(CrosstermBackend::new(stdout()))?, events);
+  tui.init()?;
 
-  restore()?;
+  // Start the main loop.
+  while app.is_running() {
+    // Render the user interface.
+    tui.draw(&mut app)?;
+
+    // Handle events.
+    match tui.events.next().await? {
+      Event::Tick => app.tick(),
+      Event::Key(key_event) => handle_key_events(key_event, &mut app)?,
+      Event::Mouse(_) => {}
+      Event::Resize(_, _) => {}
+    }
+  }
+
+  // Exit the user interface.
+  tui.exit()?;
   Ok(())
 }
+

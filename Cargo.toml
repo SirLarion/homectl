@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 clap = { version = "4.5.1", features = ["derive"] }
-crossterm = "0.27.0"
+crossterm = { version = "0.27.0", features = ["event-stream"] }
 dotenv = "0.15.0"
 itertools = "0.12.1"
 log = { version = "0.4.20", features = ["std"] }
@@ -20,6 +20,8 @@ serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.114"
 thiserror = "1.0.57"
 inquire = { version = "0.7.1", features = ["date"] }
+tokio = { version = "1.39.2", features = ["macros", "rt-multi-thread"] }
+futures = "0.3.30"
 
 [features]
 default = ["minecraft", "git", "habitica", "tui"]

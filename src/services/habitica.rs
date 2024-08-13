@@ -1,17 +1,24 @@
+use tokio::runtime::Builder;
 use clap::Subcommand;
 
 use crate::error::AppError;
 
-pub mod util;
+mod util;
+mod types;
 use util::*; 
 
 #[cfg(feature = "tui")]
-pub mod tui;
+mod tui;
 
 #[derive(Subcommand)]
 pub enum Operation {
   /// List all TODOs
-  List,
+  List {
+    /// Save the list of tasks as a JSON file
+    #[arg(long, default_value_t = false)]
+    save_json: bool
+  },
+
   /// Create a new TODO item
   Task {
     /// Optionally define TODO item with a descriptor. Format:
@@ -24,14 +31,23 @@ pub enum Operation {
 pub fn run_service(operation: Option<Operation>) -> Result<(), AppError> {
   assert_service_installed()?;
 
-  match operation {
-    Some(Operation::List) => list_tasks()?,
-    Some(Operation::Task { descriptor }) => create_task(descriptor)?,
+  // Create async runtime to enable fetching Habitica API data
+  let runtime = Builder::new_multi_thread()
+    .worker_threads(1)
+    .enable_all()
+    .build()
+    .unwrap();
+
+  let handle = match operation {
+    Some(Operation::List { save_json }) => runtime.spawn(list_tasks(save_json)),
+    Some(Operation::Task { descriptor }) => runtime.spawn(create_task(descriptor)),
     None => {
       #[cfg(feature = "tui")]   
-      start_interactive()?;
+      runtime.spawn(tui::run())
     }
-  }
+  };
+
+  let _ = runtime.block_on(handle);
 
   Ok(())
 }

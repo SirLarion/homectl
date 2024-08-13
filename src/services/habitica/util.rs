@@ -1,33 +1,18 @@
+use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::{fmt, env};
 
+use tokio::time::{sleep, Duration};
 use inquire::{Text, Select, DateSelect, min_length, max_length};
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use reqwest::blocking as req;
+use reqwest as req;
 use serde::{Serialize, Deserialize};
 
 use crate::error::AppError;
-
-#[cfg(feature = "tui")]
-use crate::services::habitica::tui;
-
-#[derive(Serialize, Deserialize, Default)]
-struct SubTask {
-  text: String,
-  completed: bool
-}
-
-#[derive(Serialize, Deserialize, Default)]
-struct Task {
-  text: String,
-  #[serde(rename = "type")]
-  task_type: String,
-  priority: f32,
-  notes: Option<String>,
-  date: Option<String>,
-  checklist: Option<Vec<SubTask>>,
-}
-
+use crate::util::build_config_path;
+use super::types::{Task, SubTask};
 
 impl fmt::Display for Task {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -37,7 +22,7 @@ impl fmt::Display for Task {
 
     if let Some(subtasks) = &self.checklist {
       for SubTask { text, completed } in subtasks {
-        let check = if *completed { "[x]" } else { "[ ]" };
+        let check = if *completed { "✅" } else { "⬜" };
         write!(f, "\n{check} {text}")?;
       }
     }
@@ -45,16 +30,21 @@ impl fmt::Display for Task {
   }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct ArrayRes<T> {
   data: Vec<T>,
 }
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct SingleRes<T> {
   data: T,
 }
 
 const HABITICA_API_ENDPOINT: &str = "https://habitica.com/api/v3";
+
+fn get_json_path() -> Result<String, AppError> {
+  let dir = build_config_path()?;
+  Ok(format!("{dir}/habitica_tasks.json"))
+}
 
 fn get_env_vars() -> Result<(String, String, String), AppError> {
   Ok((
@@ -82,13 +72,6 @@ pub fn assert_service_installed() -> Result<(), AppError> {
 
   Ok(())
 }
-
-#[cfg(feature = "tui")]
-pub fn start_interactive() -> Result<(), AppError> {
-  tui::start()?;
-  Ok(())
-}
-
 
 fn parse_difficulty(selected: &str) -> Result<f32, AppError> {
   let parsed: f32 = match selected {
@@ -177,7 +160,7 @@ fn prompt_for_task() -> Result<Task, AppError> {
   })
 }
 
-pub fn create_task(descriptor: Option<String>) -> Result<(), AppError> {
+pub async fn create_task(descriptor: Option<String>) -> Result<(), AppError> {
   let task: Task; 
   if descriptor.is_some() {
     task = parse_task_descriptor(descriptor.unwrap())?; 
@@ -191,27 +174,64 @@ pub fn create_task(descriptor: Option<String>) -> Result<(), AppError> {
     .post(format!("{HABITICA_API_ENDPOINT}/tasks/user"))
     .json::<Task>(&task)
     .headers(headers)
-    .send()?
+    .send().await?
     .error_for_status()?;
 
-  let created = serde_json::from_str::<SingleRes<Task>>(&res.text()?)?;
+  let created = serde_json::from_str::<SingleRes<Task>>(&res.text().await?)?;
   println!("Created: \n{}", created.data);
  
   Ok(())
 }
 
+/// Mock version of the fetch_tasks function to avoid unnecessary API calls.
+/// Reads data from ~/.config/hutctl/habitica_tasks.json and will fail if such
+/// a file does not exist
+#[cfg(debug_assertions)]
+async fn fetch_tasks() -> Result<ArrayRes<Task>, AppError> {
+  let path = get_json_path()?;
+  let data = fs::read_to_string(path)?;
+  let tasks = serde_json::from_str::<ArrayRes<Task>>(data.as_str())?;
 
-pub fn list_tasks() -> Result<(), AppError> {
+  // Artificial delay
+  sleep(Duration::from_millis(500)).await;
+
+  Ok(tasks)
+}
+
+/// Fetch all tasks of type: todo from Habitica API. For our purposes a "todo"
+/// task is the same as a task in general
+#[cfg(not(debug_assertions))]
+async fn fetch_tasks() -> Result<ArrayRes<Task>, AppError> {
   let client = req::Client::new();
   let headers = get_headers()?;
   let res = client
     .get(format!("{HABITICA_API_ENDPOINT}/tasks/user?type=todos"))
     .headers(headers)
-    .send()?;
+    .send()
+    .await?;
 
-  let tasks = serde_json::from_str::<ArrayRes<Task>>(&res.text()?)?;
-  for task in tasks.data {
+  let tasks = serde_json::from_str::<ArrayRes<Task>>(&res.text().await?)?;
+
+  Ok(tasks)
+}
+
+pub async fn get_task_list() -> Result<Vec<Task>, AppError> {
+  let deserialized = fetch_tasks().await?;
+  Ok(deserialized.data)
+}
+
+pub async fn list_tasks(save_json: bool) -> Result<(), AppError> {
+  let deserialized = fetch_tasks().await?;
+
+  for task in &deserialized.data {
     println!("{task}");
+  }
+
+  if save_json {
+    let mut file = File::create(get_json_path()?)?; 
+    let data = serde_json::to_string(&deserialized)?;
+    file.write_all(data.as_bytes())?;
+    println!("\nSaved list to ~/.config/habitica_tasks.json");
   }
 
   Ok(())

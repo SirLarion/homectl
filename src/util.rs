@@ -17,8 +17,7 @@ pub const SYSTEMCTL_OPERATIONS: [&str; 6] = ["start", "stop", "restart", "enable
 
 const HUTCTL_CONFIG_DIR: &str = ".config/hutctl";
 
-pub fn load_env() -> Result<(), AppError> {
-  let cwd = env::current_dir()?;
+pub fn build_config_path() -> Result<String, AppError> {
   let sudo_user_var = env::var("SUDO_USER");
   let home_var = env::var("HOME");
   let dir: String;
@@ -28,6 +27,13 @@ pub fn load_env() -> Result<(), AppError> {
     (_, Ok(home)) => dir = format!("{home}/{HUTCTL_CONFIG_DIR}"),
     (Err(_), Err(e)) => return Err(e.into()),
   }
+
+  Ok(dir)
+}
+
+pub fn load_env() -> Result<(), AppError> {
+  let cwd = env::current_dir()?;
+  let dir = build_config_path()?;
 
   // Go to config dir and pull .env contents
   if let Err(_) = env::set_current_dir(dir) {

@@ -25,6 +25,9 @@ pub enum AppError {
   #[error(transparent)]
   ParseFloatError(#[from] num::ParseFloatError),
 
+  #[error(transparent)]
+  RecvError(#[from] tokio::sync::oneshot::error::RecvError),
+
   #[error("incorrect rights for the requested operation")]
   AclError(String),
 

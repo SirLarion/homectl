@@ -39,7 +39,7 @@ fn main() -> Result<(), AppError> {
         
         #[cfg(feature = "habitica")]
         Habitica { operation } => {
-          services::habitica::run_service(operation)?
+          services::habitica::run_service(operation)?;
         }
       }
     },

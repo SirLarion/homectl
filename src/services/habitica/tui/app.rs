@@ -1,82 +1,67 @@
-use crossterm::event::{Event, KeyEventKind, KeyCode, KeyEvent, self};
-// use ratatui::text::Text;
-use ratatui::Frame;
-use ratatui::buffer::Buffer;
-use ratatui::layout::{Alignment, Rect};
-use ratatui::symbols::border;
-// use ratatui::text::Line;
-use ratatui::widgets::block::{Position, Title};
-use ratatui::widgets::{Paragraph, Borders, Block, Widget};
+use super::{
+  widgets::grid::TaskGridState, util::Direction
+};
 
-use crate::services::habitica::tui;
-use crate::error::AppError;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::{Sender, Receiver};
+
+use crate::services::habitica::util::get_task_list;
+use crate::services::habitica::types::Task;
 
 #[derive(PartialEq)]
-pub enum TuiState {
+pub enum AppState {
   List,
-  Create,
-  Exit
-  // Edit? More?
+  Exit,
+  CreateTask,
+  EditTask
 }
 
 pub struct Habitui {
-  state: TuiState,
+  pub state: AppState,
+  pub grid_state: TaskGridState,
+  pub tx: Sender<Vec<Task>>,
+  pub rx: Receiver<Vec<Task>>,
+  pub should_refresh_tasks: bool,
 }
 
 impl Default for Habitui {
   fn default() -> Self { 
-    Self { state: TuiState::List } 
+    let (tx, rx) = mpsc::channel::<Vec<Task>>(1);
+    Self {
+      state: AppState::List,
+      grid_state: TaskGridState::default(),
+      tx,
+      rx,
+      should_refresh_tasks: true,
+    }
   }
 }
 
 impl Habitui {
-  pub fn run(&mut self, terminal: &mut tui::Tui) -> Result<(), AppError> {
-    while self.state != TuiState::Exit {
-      terminal.draw(|frame| self.render_frame(frame))?;
-      self.handle_events()?;
+  fn handle_fetch_tasks(&mut self) {
+    if self.should_refresh_tasks {
+      let tx = self.tx.clone();
+
+      tokio::spawn(async move {
+        if let Ok(tasks_res) = get_task_list().await {
+          if let Err(_) = tx.send(tasks_res).await {}
+        }
+      });
     }
-    Ok(())
-  }
-
-  fn exit(&mut self) {
-    self.state = TuiState::Exit
-  }
-
-  fn render_frame(&self, frame: &mut Frame) {
-    frame.render_widget(self, frame.size());
-  }
-
-  fn handle_events(&mut self) -> Result<(), AppError> {
-    match event::read()? {
-      // it's important to check that the event is a key press event as
-      // crossterm also emits key release and repeat events on Windows.
-      Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-        self.handle_key_event(key_event);
-      },
-      _ => {}
-    };
-    Ok(())
-  }
-
-  fn handle_key_event(&mut self, key_event: KeyEvent) {
-    match key_event.code {
-      KeyCode::Char('q') => self.exit(),
-      _ => {}
+    if let Ok(tasks) = self.rx.try_recv() {
+      self.grid_state.set_items(tasks);
     }
   }
-}
 
-impl Widget for &Habitui {
-  fn render(self, area: Rect, buf: &mut Buffer) {
-    let title = Title::from(" HabiTUI ");
-    let block = Block::default()
-      .title(title.alignment(Alignment::Center))
-      .borders(Borders::ALL)
-      .border_set(border::THICK);
-
-    Paragraph::new("bubbi")
-      .centered()
-      .block(block)
-      .render(area, buf);
+  pub fn is_running(&self) -> bool {
+    self.state != AppState::Exit
   }
+
+  pub fn tick(&mut self) {
+    self.handle_fetch_tasks();
+  }
+
+  pub fn get_selected_task(&self) {
+    let index = self.grid_state.selected;
+  } 
 }
