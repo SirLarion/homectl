@@ -22,7 +22,13 @@ impl fmt::Display for Task {
 
     if let Some(subtasks) = &self.checklist {
       for SubTask { text, completed } in subtasks {
-        let check = if *completed { "✅" } else { "⬜" };
+        let check = if *completed { "✅" } else { 
+          if cfg!(feature = "dark-mode") {
+            "⬛"
+          } else {
+            "⬜" 
+          }
+        };
         write!(f, "\n{check} {text}")?;
       }
     }
