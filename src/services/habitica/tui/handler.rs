@@ -1,31 +1,187 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use tui_textarea::CursorMove;
+
 use crate::error::AppError;
 
-use super::{app::{Habitui, AppState}, util::Direction};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use super::{
+  app::{Habitui, AppState}, 
+  util::Direction, 
+  widgets::editor::{EditorState, EditorMode}
+};
 
 /// Handles key events and updates the state of Habitui.
 pub fn handle_key_events(key_event: KeyEvent, app: &mut Habitui) -> Result<(), AppError> {
+  // Exit application on `Ctrl-C`
+  if key_event.code == KeyCode::Char('c') || key_event.code == KeyCode::Char('C') {
+    if key_event.modifiers == KeyModifiers::CONTROL {
+      app.state = AppState::Exit;
+
+      return Ok(());
+    }
+  }
+
+  if app.state == AppState::Editor {
+    let editor = app.editor_state.as_mut().unwrap();
+
+
+    match editor.mode {
+      EditorMode::Normal => {
+        match key_event.code {
+          KeyCode::Esc | KeyCode::Char('q') => {
+            app.state = AppState::List;
+          },
+          KeyCode::Enter => {
+            if editor.is_modified {
+              let task = editor.clone_task();
+              app.handle_submit_task(task);
+
+              app.state = AppState::List;
+            } 
+          },
+          KeyCode::Char('h') => editor.move_cursor(CursorMove::Back),
+          KeyCode::Char('l') => editor.move_cursor(CursorMove::Forward),
+          KeyCode::Char('w') => {
+            let mod_key = editor.pop_mod_key();
+            if let Some((textarea, i)) = editor.get_focused_mut() {
+              textarea.move_cursor(CursorMove::WordForward);
+              match mod_key {
+                Some(KeyEvent { code: _c @ KeyCode::Char('c'), .. }) => {
+                  textarea.delete_word();
+                  editor.mark_modified(i);
+                  editor.enter_insert_mode();
+                }
+                _ => {}
+              }
+            }
+          }
+          KeyCode::Char('b') => {
+            let mod_key = editor.pop_mod_key();
+            if let Some((textarea, i)) = editor.get_focused_mut() {
+              match mod_key {
+                Some(KeyEvent { code: _c @ KeyCode::Char('c'), .. }) => {
+                  textarea.delete_word();
+                  editor.mark_modified(i);
+                  editor.enter_insert_mode();
+                }
+                _ => {
+                  textarea.move_cursor(CursorMove::WordBack)
+                }
+              }
+            }
+          }
+          KeyCode::Char('d') => {
+            let mod_key = editor.pop_mod_key();
+            match mod_key {
+              Some(KeyEvent { code: _c @ KeyCode::Char('d'), .. }) => {
+                if let Some((textarea, i)) = editor.get_focused_mut() {
+                  textarea.move_cursor(CursorMove::Head);
+                  textarea.delete_line_by_end();
+                  editor.mark_modified(i);
+                  editor.sync_changes();
+                }
+              }
+              _ => {
+                editor.add_mod_key(key_event);
+              }
+            }
+          }
+          KeyCode::Char('c') => {
+            editor.add_mod_key(key_event);
+          }
+          KeyCode::Char('y') => {
+            editor.add_mod_key(key_event);
+          }
+          KeyCode::Char('j') | KeyCode::Tab => {
+            editor.focus = Some(editor.focus.map_or(0, |mut i| {
+             i += 1;
+             i.clamp(0, editor.fields.len() -1)
+            }));
+          }
+          KeyCode::Char('k') => {
+            editor.focus = Some(editor.focus.map_or(0, |mut i| {
+              i = i.saturating_sub(1);
+              i.clamp(0, editor.fields.len() -1)
+            }));
+          }
+          KeyCode::Char('i') => {
+            editor.enter_insert_mode();
+          },
+          KeyCode::Char('a') => {
+            editor.move_cursor(CursorMove::Forward);
+            editor.enter_insert_mode();
+          }
+          KeyCode::Char('o') | KeyCode::Char('O') => {
+            editor.insert_subtask();
+          }
+          _ => {}
+        }
+      },
+      EditorMode::Insert => {
+        match key_event.code {
+          KeyCode::Esc => editor.exit_insert_mode(),
+          KeyCode::Enter => {
+            match editor.focus {
+              Some(i) if i < editor.fields.len() -1 => {
+                editor.focus = Some(i+1);
+              },
+              Some(_) => {
+                editor.insert_subtask();
+              },
+              None => {}
+            }
+          }
+          KeyCode::Tab => {
+            let mut i = *editor.focus.get_or_insert(0);
+            if key_event.modifiers == KeyModifiers::SHIFT {
+              i = i.saturating_sub(1);
+            } else {
+              i += 1;
+            }
+            editor.focus = Some(i.clamp(0, editor.fields.len() -1));
+          },
+          c => { 
+            if c == KeyCode::Char('j') {
+              match editor.mod_key {
+                Some((KeyEvent { code: _c @ KeyCode::Char('j'), .. }, _)) => editor.exit_insert_mode(),
+                _ => editor.add_mod_key(key_event),
+              }
+              return Ok(());
+            };
+            let mod_key = editor.pop_mod_key();
+
+            if let Some(index) = editor.focus {
+              if let Some(textarea) = editor.fields.get_mut(index) {
+                if let Some(pending) = mod_key {
+                  textarea.input(pending); 
+                } 
+                textarea.input(key_event); 
+                editor.dirty_fields.push(index);
+                editor.is_modified = true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return Ok(());
+  }
+
   match key_event.code {
     // Exit application on `ESC` or `q`
     KeyCode::Esc | KeyCode::Char('q') => {
-      if app.state == AppState::CreateTask || app.state == AppState::EditTask {
-        app.state = AppState::List;
-      } else {
-        app.state = AppState::Exit;
-      }
+      app.state = AppState::Exit;
     }
-    // Exit application on `Ctrl-C`
-    KeyCode::Char('c') | KeyCode::Char('C') => {
-      if key_event.modifiers == KeyModifiers::CONTROL {
-        app.state = AppState::Exit;
-      }
-    }
+    // Enter editor to create new task or edit an existing one
     KeyCode::Char('a') => {
-      app.state = AppState::CreateTask;
+      app.state = AppState::Editor;
+      app.editor_state = Some(EditorState::new(None))
     }
     KeyCode::Char('e') => {
-      if let Some(_) = app.grid_state.get_selected() {
-        app.state = AppState::EditTask;
+      let selected = app.grid_state.get_selected(); 
+      if selected.is_some() {
+       app.state = AppState::Editor;
+       app.editor_state = Some(EditorState::new(selected))
       }
     }
     // Change selection with vim motions

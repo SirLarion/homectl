@@ -18,7 +18,7 @@ impl fmt::Display for Task {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "{}", &self.text)?;
     let _ = &self.notes.clone().map(|n| write!(f, "\n{}", n));
-    let _ = &self.date.clone().map(|d| write!(f, "\nDue: {}", d));
+    let _ = &self.date.clone().map(|d| write!(f, "\n{}", d.split("T").next().unwrap_or("".into())));
 
     if let Some(subtasks) = &self.checklist {
       for SubTask { text, completed } in subtasks {
@@ -97,6 +97,7 @@ fn parse_task_descriptor(descriptor: String) -> Result<Task, AppError> {
   match parts {
     (Some(text), Some(priority), notes, date, check) => {
       return Ok(Task { 
+        id: "".into(),
         text: text.into(), 
         task_type: "todo".into(), 
         priority: priority.parse()?, 
@@ -157,6 +158,7 @@ fn prompt_for_task() -> Result<Task, AppError> {
   let checklist = prompt_for_checklist()?;
 
   Ok(Task {
+    id: "".into(),
     text: name,
     task_type: "todo".into(),
     priority: parse_difficulty(difficulty)?,
@@ -174,6 +176,15 @@ pub async fn create_task(descriptor: Option<String>) -> Result<(), AppError> {
     task = prompt_for_task()?;
   }
   debug!("Creating task: \n{task}");
+
+  let created = post_created_task(task).await?;
+
+  println!("Created: \n{}", created);
+ 
+  Ok(())
+}
+
+pub async fn post_created_task(task: Task) -> Result<Task, AppError> {
   let client = req::Client::new();
   let headers = get_headers()?;
   let res = client
@@ -184,9 +195,45 @@ pub async fn create_task(descriptor: Option<String>) -> Result<(), AppError> {
     .error_for_status()?;
 
   let created = serde_json::from_str::<SingleRes<Task>>(&res.text().await?)?;
-  println!("Created: \n{}", created.data);
- 
-  Ok(())
+
+  Ok(created.data)
+}
+
+#[cfg(debug_assertions)]
+pub async fn edit_task(task: Task) -> Result<Task, AppError> {
+  let path = get_json_path()?;
+  let data = fs::read_to_string(path)?;
+  let mut tasks = serde_json::from_str::<ArrayRes<Task>>(data.as_str())?.data;
+
+  let mut iter = tasks.iter_mut();
+  let index_of = iter.position(|t| t.id == task.id);
+
+  if let Some(index) = index_of {
+    let _ = std::mem::replace(&mut tasks[index], task.clone());
+  } else {
+    tasks.insert(0, task.clone());
+  }
+
+  let mut file = File::create(get_json_path()?)?; 
+  let data = serde_json::to_string(&ArrayRes { data: tasks })?;
+  file.write_all(data.as_bytes())?;
+
+  Ok(task)
+}
+
+#[cfg(not(debug_assertions))]
+pub async fn edit_task(task: Task) -> Result<Task, AppError> {
+  let client = req::Client::new();
+  let headers = get_headers()?;
+  let res = client
+    .put(format!("{HABITICA_API_ENDPOINT}/tasks/{}", task.id))
+    .json::<Task>(&task)
+    .headers(headers)
+    .send().await?
+    .error_for_status()?;
+
+  let created = serde_json::from_str::<SingleRes<Task>>(&res.text().await?)?;
+  Ok(created.data)
 }
 
 /// Mock version of the fetch_tasks function to avoid unnecessary API calls.

@@ -19,7 +19,7 @@ const GRID_SIZE: u8 = (GRID_WIDTH * GRID_HEIGHT) as u8;
 pub struct TaskGridState {
   pub page: u8,
   pub selected: Option<u8>,
-  task_items: Vec<Task>,
+  pub task_items: Vec<Task>,
   pub loading: bool
 }
 
@@ -29,10 +29,6 @@ impl Default for TaskGridState {
   }
 }
 impl TaskGridState {
-  pub fn set_items(&mut self, items: Vec<Task>) {
-    self.task_items = items;
-  }
-
   pub fn select_next(&mut self, direction: Direction) {
     if let None = self.selected {
       self.selected = Some(self.page * GRID_SIZE);
@@ -110,7 +106,7 @@ impl StatefulWidget for TaskGrid {
       for i in 0..GRID_WIDTH {
         let col = cols.get(i).unwrap();
         let cell_full = col.get(j).unwrap();
-        let cell = cell_full.inner(&Margin::new(0, j as u16 % 2));
+        let cell = cell_full.inner(Margin::new(0, j as u16 % 2));
 
         let index = usize::from(state.page) * GRID_WIDTH * GRID_HEIGHT + j * GRID_WIDTH + i;
 
