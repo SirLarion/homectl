@@ -39,7 +39,13 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut Habitui) -> Result<(), A
             } 
           },
           KeyCode::Char('h') => editor.move_cursor(CursorMove::Back),
-          KeyCode::Char('l') => editor.move_cursor(CursorMove::Forward),
+          KeyCode::Char('l') => {
+            if key_event.modifiers == KeyModifiers::CONTROL {
+              editor.mode = EditorMode::Calendar;
+            } else {
+              editor.move_cursor(CursorMove::Forward);
+            }
+          }
           KeyCode::Char('w') => {
             let mod_key = editor.pop_mod_key();
             if let Some((textarea, i)) = editor.get_focused_mut() {
@@ -160,6 +166,37 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut Habitui) -> Result<(), A
               }
             }
           }
+        }
+      }
+      EditorMode::Calendar => {
+        match key_event.code {
+          KeyCode::Esc | KeyCode::Char('q') => {
+            app.state = AppState::List;
+          },
+          KeyCode::Char('h') => {
+            if key_event.modifiers == KeyModifiers::CONTROL {
+              editor.mode = EditorMode::Normal;
+            } else {
+              editor.move_date_cursor(CursorMove::Back);
+            }
+          }
+          KeyCode::Char('j') => editor.move_date_cursor(CursorMove::Down),
+          KeyCode::Char('k') => editor.move_date_cursor(CursorMove::Up),
+          KeyCode::Char('l') => editor.move_date_cursor(CursorMove::Forward),
+          KeyCode::Char('x') => editor.remove_due_date(),
+          KeyCode::Char(' ') => {
+            editor.task.date = editor.date_focus;
+            editor.is_modified = true;
+          }
+          KeyCode::Enter => {
+            if editor.is_modified {
+              let task = editor.clone_task();
+              app.handle_submit_task(task);
+
+              app.state = AppState::List;
+            } 
+          },
+          _ => {}
         }
       }
     }

@@ -3,22 +3,30 @@ use std::fs::File;
 use std::io::Write;
 use std::{fmt, env};
 
+use time::{
+  OffsetDateTime, 
+  format_description::well_known::Iso8601
+};
 use tokio::time::{sleep, Duration};
 use inquire::{Text, Select, DateSelect, min_length, max_length};
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use reqwest as req;
 use serde::{Serialize, Deserialize};
+
+#[cfg(not(debug_assertions))]
+use reqwest as req;
 
 use crate::error::AppError;
 use crate::util::build_config_path;
 use super::types::{Task, SubTask};
 
+pub const ISO8601: Iso8601 = Iso8601::DEFAULT;
+
 impl fmt::Display for Task {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "{}", &self.text)?;
     let _ = &self.notes.clone().map(|n| write!(f, "\n{}", n));
-    let _ = &self.date.clone().map(|d| write!(f, "\n{}", d.split("T").next().unwrap_or("".into())));
+    let _ = &self.date.clone().map(|d| write!(f, "\n{}", d.format(&Iso8601::DATE).unwrap()));
 
     if let Some(subtasks) = &self.checklist {
       for SubTask { text, completed } in subtasks {
@@ -102,7 +110,7 @@ fn parse_task_descriptor(descriptor: String) -> Result<Task, AppError> {
         task_type: "todo".into(), 
         priority: priority.parse()?, 
         notes: notes.map(|n| n.into()), 
-        date: date.map(|d| d.into()), 
+        date: date.map(|d| OffsetDateTime::parse(d.into(), &ISO8601).unwrap()), 
         checklist: check.map(|c| c.split(";").map(|i| SubTask { text: i.into(), completed: false }).collect())
       }); 
     },
@@ -153,7 +161,7 @@ fn prompt_for_task() -> Result<Task, AppError> {
   let date = DateSelect::new("Due date:")
     .with_help_message("Press ESC to skip")
     .prompt_skippable()?
-    .map(|d| d.format("%F").to_string());
+    .map(|d| OffsetDateTime::parse(&d.format("%F").to_string(), &ISO8601).unwrap());
 
   let checklist = prompt_for_checklist()?;
 
@@ -184,6 +192,7 @@ pub async fn create_task(descriptor: Option<String>) -> Result<(), AppError> {
   Ok(())
 }
 
+#[cfg(not(debug_assertions))]
 pub async fn post_created_task(task: Task) -> Result<Task, AppError> {
   let client = req::Client::new();
   let headers = get_headers()?;
@@ -197,6 +206,22 @@ pub async fn post_created_task(task: Task) -> Result<Task, AppError> {
   let created = serde_json::from_str::<SingleRes<Task>>(&res.text().await?)?;
 
   Ok(created.data)
+}
+
+#[cfg(debug_assertions)]
+pub async fn post_created_task(task: Task) -> Result<Task, AppError> {
+  let path = get_json_path()?;
+  let data = fs::read_to_string(path)?;
+  let mut tasks = serde_json::from_str::<ArrayRes<Task>>(data.as_str())?.data;
+
+  tasks.insert(0, task.clone());
+
+  let mut file = File::create(get_json_path()?)?; 
+  let data = serde_json::to_string(&ArrayRes { data: tasks })?;
+  file.write_all(data.as_bytes())?;
+
+  Ok(task)
+
 }
 
 #[cfg(debug_assertions)]

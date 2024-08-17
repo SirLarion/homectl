@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use time::OffsetDateTime;
 
 #[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct SubTask {
@@ -15,6 +16,10 @@ pub struct Task {
   pub task_type: String,
   pub priority: f32,
   pub notes: Option<String>,
-  pub date: Option<String>,
+  #[serde(
+    deserialize_with = "time::serde::iso8601::option::deserialize", 
+    serialize_with = "time::serde::iso8601::option::serialize"
+  )]
+  pub date: Option<OffsetDateTime>,
   pub checklist: Option<Vec<SubTask>>,
 }

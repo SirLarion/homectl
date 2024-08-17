@@ -77,7 +77,7 @@ impl Habitui<'_> {
     let tx = self.tx.clone();
 
     tokio::spawn(async move {
-      if task.id == "" {
+      if task.id.is_empty() {
         if let Ok(create_res) = post_created_task(task).await {
           if let Err(_) = tx.send(vec![create_res]).await {}
         }

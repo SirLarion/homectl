@@ -1,20 +1,26 @@
-use std::cmp::max;
-use std::marker::PhantomData;
+use std::cmp::max;use std::marker::PhantomData;
 
 use crossterm::event::KeyEvent;
 use ratatui::{
   widgets::{Clear, StatefulWidget, Widget, Block, Borders, Padding}, 
+  widgets::calendar::{Monthly, CalendarEventStore},
   layout::{Rect, Layout, Constraint}, 
   style::{Style, Color},
   buffer::Buffer
 };
+use time::{OffsetDateTime, Duration};
 use tui_textarea::{TextArea, CursorMove};
 
-use crate::{services::habitica::{types::{Task, SubTask}, tui::util::Palette}};
+use crate::services::habitica::{
+  types::{Task, SubTask}, 
+  tui::util::Palette
+};
 
+#[derive(PartialEq)]
 pub enum EditorMode {
   Normal,
   Insert,
+  Calendar
 }
 
 pub struct Editor<'e> {
@@ -28,9 +34,10 @@ impl<'e> Editor<'e> {
 }
 
 pub struct EditorState<'e> {
-  task: Task,
+  pub task: Task,
   pub mode: EditorMode,
   pub focus: Option<usize>,
+  pub date_focus: Option<OffsetDateTime>,
   pub fields: Vec<TextArea<'e>>,
   pub dirty_fields: Vec<usize>,
   pub mod_key: Option<(KeyEvent, u32)>,
@@ -48,14 +55,20 @@ fn set_default_styles<'e>(field: &mut TextArea<'e>, is_modified: bool) {
   };
 
   field.set_style(style);
-  field.set_placeholder_style(style);
   field.set_cursor_style(style);
+  field.set_placeholder_style(style.fg(if is_modified { 
+    Palette::YELLOW2.into() 
+  } else { 
+    Palette::BG2.into() 
+  }));
 }
 
-fn build_input_field<'e>(lines: Vec<String>, padding: bool) -> TextArea<'e> {
+fn build_input_field<'e>(lines: Vec<String>, is_sub: bool) -> TextArea<'e> {
   let mut field = TextArea::new(lines);
-  if padding {
+  if is_sub {
     field.set_block(Block::default().padding(Padding::horizontal(2)));
+  } else {
+    field.set_block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(Palette::BG2.into())));
   }
   set_default_styles(&mut field, false);
 
@@ -78,6 +91,29 @@ impl<'e> EditorState<'e> {
     if let Some((textarea, _)) = self.get_focused_mut() {
       textarea.move_cursor(m);
     }
+  }
+
+  pub fn move_date_cursor(&mut self, m: CursorMove) {
+    let date = self.date_focus.get_or_insert(
+      self.task.date.unwrap_or(
+        OffsetDateTime::now_utc()
+      ));
+
+    match m {
+      CursorMove::Up => *date -= Duration::WEEK,
+      CursorMove::Down => *date += Duration::WEEK, 
+      CursorMove::Forward => *date += Duration::DAY,
+      CursorMove::Back => *date -= Duration::DAY,
+      _ => {}
+    }
+    self.date_focus = Some(*date);
+  }
+
+  pub fn remove_due_date(&mut self) {
+    if let Some(_) = self.task.date {
+      self.is_modified = true;
+    }
+    self.task.date = None;
   }
 
   pub fn enter_insert_mode(&mut self) {
@@ -189,22 +225,17 @@ impl<'e> EditorState<'e> {
           Vec::new()
         };
 
-        let mut name = build_input_field(vec![task.text.clone()], false);
-        name.set_block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(Palette::BG2.into())));
-
-        let mut notes = build_input_field(notes_content, false);
-        notes.set_block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(Palette::BG2.into())));
+        let name = build_input_field(vec![task.text.clone()], false);
+        let notes = build_input_field(notes_content, false);
 
         (name, notes, subtasks, task.clone())
       }, 
       None => {
         let mut name = build_input_field(Vec::new(), false);
-        name.set_placeholder_text("New task");
-        name.set_block(Block::default().title("Name"));
+        name.set_placeholder_text("Task name");
 
         let mut notes = build_input_field(Vec::new(), false);
         notes.set_placeholder_text("--- Notes ---");
-        notes.set_block(Block::default().title("Notes"));
 
         let task = Task {
           id: "".into(),
@@ -227,7 +258,8 @@ impl<'e> EditorState<'e> {
     Self {
       task,
       mode: EditorMode::Normal,
-      focus: None, 
+      focus: Some(0), 
+      date_focus: None,
       fields,
       dirty_fields: Vec::new(),
       mod_key: None,
@@ -239,6 +271,11 @@ impl<'e> EditorState<'e> {
 impl<'e> StatefulWidget for Editor<'e> {
   type State = EditorState<'e>;
   fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+    let [left_col, right_col] = Layout::horizontal([Constraint::Fill(2), Constraint::Fill(1)])
+      .vertical_margin(1)
+      .horizontal_margin(3)
+      .areas(area);
+
     let mut constraints: Vec<Constraint> = (2..state.fields.len())
       .map(|_| Constraint::Length(1))
       .collect();
@@ -248,9 +285,7 @@ impl<'e> StatefulWidget for Editor<'e> {
     constraints.push(Constraint::Fill(1));
 
     let chunks = Layout::vertical(constraints)
-      .vertical_margin(1)
-      .horizontal_margin(3)
-      .split(area);
+      .split(left_col);
 
     Clear::default().render(area, buf);
 
@@ -267,15 +302,13 @@ impl<'e> StatefulWidget for Editor<'e> {
     };
     Block::default().style(Style::default().bg(card_bg)).render(area, buf);
 
+    let cursor_style = Style::default().bg(Palette::CURSOR.into());
+
     for (i, textarea) in state.fields.iter_mut().enumerate() {
       if let Some(s) = state.focus {
         set_default_styles(textarea, state.is_modified);
-        if i == s {
-          // let style = Style::default()
-          //   .underline_color(Palette::BG2.into());
-          // textarea.set_style(style);
-          // textarea.set_placeholder_style(style);
-          textarea.set_cursor_style(Style::default().bg(Palette::CURSOR.into()));
+        if i == s && state.mode != EditorMode::Calendar {
+          textarea.set_cursor_style(cursor_style);
         };
       }
       if let Some(block) = textarea.block().cloned() {
@@ -288,8 +321,31 @@ impl<'e> StatefulWidget for Editor<'e> {
       x: chunks[0].x,
       y: chunks[1].y + 1,
       width: chunks[0].width,
-      height: chunks[chunks.len()-1].y - chunks[1].y,
+      height: chunks[chunks.len()-1].y + chunks[chunks.len()-1].height - chunks[1].y - 1,
     };
     Block::bordered().border_style(border_bg).render(checklist_area, buf);
+
+    let mut event_store = CalendarEventStore::default();
+
+    state.task.date.map(|d| event_store.add(d.date(), Style::default().bg(border_bg)));
+
+    let date = if let Some(focus) = state.date_focus {
+      focus.date()
+    } else {
+      if let Some(due) = state.task.date {
+        due.date()
+      } else {
+        OffsetDateTime::now_utc().date()
+      }
+    };
+
+    if state.mode == EditorMode::Calendar {
+      event_store.add(date, cursor_style);
+    }
+
+    Monthly::new(date, event_store)
+      .show_surrounding(Style::default())
+      .show_month_header(Style::default())
+      .render(right_col, buf);
   }
 }
