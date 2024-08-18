@@ -14,6 +14,7 @@ pub enum Palette {
   BG      = 0x00fafafa, // #fafafa
   BG2     = 0x00f0f0f0, // #f0f0f0
   GREEN   = 0x00e3f2c4, // #e3f2c4 
+  GREEN2  = 0x00c7dba0, // #c7dba0 
   RED,
   YELLOW  = 0x00fae4c4, // #fae4c4
   YELLOW2 = 0x00ddcda6, // #ddcda6
@@ -27,6 +28,7 @@ pub enum Palette {
   BG     = 0x001d1d2b, // #1d1d2b
   BG2    = 0x00101019, // #101019
   GREEN  = 0x00254428, // #254428 
+  GREEN2,
   RED,
   YELLOW,
   YELLOW2,

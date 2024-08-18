@@ -1,7 +1,6 @@
 use super::widgets::editor::EditorState;
 use super::widgets::grid::TaskGridState;
 
-use crossterm::event::KeyCode;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Sender, Receiver};
 
@@ -113,6 +112,9 @@ impl Habitui<'_> {
     self.editor_state.as_mut().map(|s| {
       s.decay_mod_key();
     });
+
+    self.grid_state.decay_mod_key();
+
     self.decay_debug_msg();
   }
 }

@@ -1,9 +1,8 @@
 use std::cmp::max;use std::marker::PhantomData;
-
 use crossterm::event::KeyEvent;
 use ratatui::{
   widgets::{Clear, StatefulWidget, Widget, Block, Borders, Padding}, 
-  widgets::calendar::{Monthly, CalendarEventStore},
+  widgets::{calendar::{Monthly, CalendarEventStore}, Paragraph, BorderType},
   layout::{Rect, Layout, Constraint}, 
   style::{Style, Color},
   buffer::Buffer
@@ -12,7 +11,7 @@ use time::{OffsetDateTime, Duration};
 use tui_textarea::{TextArea, CursorMove};
 
 use crate::services::habitica::{
-  types::{Task, SubTask}, 
+  types::{Task, SubTask, Difficulty}, 
   tui::util::Palette
 };
 
@@ -107,6 +106,16 @@ impl<'e> EditorState<'e> {
       _ => {}
     }
     self.date_focus = Some(*date);
+  }
+
+  pub fn next_task_difficulty(&mut self) {
+    self.task.difficulty = self.task.difficulty.next();
+    self.is_modified = true;
+  }
+
+  pub fn prev_task_difficulty(&mut self) {
+    self.task.difficulty = self.task.difficulty.prev();
+    self.is_modified = true;
   }
 
   pub fn remove_due_date(&mut self) {
@@ -237,17 +246,7 @@ impl<'e> EditorState<'e> {
         let mut notes = build_input_field(Vec::new(), false);
         notes.set_placeholder_text("--- Notes ---");
 
-        let task = Task {
-          id: "".into(),
-          text: "".into(),
-          notes: None,
-          task_type: "todo".into(),
-          priority: 1.0, 
-          date: None,
-          checklist: None,
-        };
-
-        (name, notes, Vec::new(), task)
+        (name, notes, Vec::new(), Task::default())
       }
     };
 
@@ -325,6 +324,9 @@ impl<'e> StatefulWidget for Editor<'e> {
     };
     Block::bordered().border_style(border_bg).render(checklist_area, buf);
 
+    let [cal_area, diff_area] = Layout::vertical([Constraint::Length(7), Constraint::Fill(1)]).areas(right_col);
+
+
     let mut event_store = CalendarEventStore::default();
 
     state.task.date.map(|d| event_store.add(d.date(), Style::default().bg(border_bg)));
@@ -344,8 +346,43 @@ impl<'e> StatefulWidget for Editor<'e> {
     }
 
     Monthly::new(date, event_store)
+      .block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(border_bg)))
       .show_surrounding(Style::default())
       .show_month_header(Style::default())
-      .render(right_col, buf);
+      .render(cal_area, buf);
+
+    let diff_chunks: Vec<Rect> = Layout::vertical([Constraint::Length(3), Constraint::Length(3)])
+      .horizontal_margin(2)
+      .areas::<2>(diff_area)
+      .into_iter()
+      .flat_map(|r: Rect| {
+        Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)])
+          .spacing(1)
+          .areas::<2>(r)
+      })
+      .collect();
+
+    for (i, a) in diff_chunks.iter().enumerate() {
+      let diff = match i {
+        0 => Difficulty::TRIVIAL,
+        1 => Difficulty::EASY,
+        2 => Difficulty::MEDIUM,
+        3 => Difficulty::HARD,
+        _ => Difficulty::EASY
+      }; 
+      let style = if diff == state.task.difficulty {
+        Style::default().fg(Palette::FG.into())
+      } else {
+        Style::default().fg(border_bg)
+      };
+
+      Paragraph::new(diff.to_string())
+        .block(Block::bordered()
+          .style(style)
+          .border_type(BorderType::Rounded)
+          .border_style(style)
+          // .padding()
+      ).render(*a, buf);
+    }
   }
 }

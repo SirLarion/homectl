@@ -1,7 +1,7 @@
 use std::fs;
 use std::fs::File;
 use std::io::Write;
-use std::{fmt, env};
+use std::env;
 
 use time::{
   OffsetDateTime, 
@@ -18,31 +18,9 @@ use reqwest as req;
 
 use crate::error::AppError;
 use crate::util::build_config_path;
-use super::types::{Task, SubTask};
+use super::types::{Task, SubTask, Difficulty};
 
 pub const ISO8601: Iso8601 = Iso8601::DEFAULT;
-
-impl fmt::Display for Task {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{}", &self.text)?;
-    let _ = &self.notes.clone().map(|n| write!(f, "\n{}", n));
-    let _ = &self.date.clone().map(|d| write!(f, "\n{}", d.format(&Iso8601::DATE).unwrap()));
-
-    if let Some(subtasks) = &self.checklist {
-      for SubTask { text, completed } in subtasks {
-        let check = if *completed { "✅" } else { 
-          if cfg!(feature = "dark-mode") {
-            "⬛"
-          } else {
-            "⬜" 
-          }
-        };
-        write!(f, "\n{check} {text}")?;
-      }
-    }
-    write!(f, "\n")
-  }
-}
 
 #[derive(Serialize, Deserialize)]
 struct ArrayRes<T> {
@@ -87,12 +65,12 @@ pub fn assert_service_installed() -> Result<(), AppError> {
   Ok(())
 }
 
-fn parse_difficulty(selected: &str) -> Result<f32, AppError> {
-  let parsed: f32 = match selected {
-    "Trivial" => 0.1,
-    "Easy" => 1.0,
-    "Medium" => 1.5,
-    "Hard" => 2.0,
+fn parse_difficulty(selected: &str) -> Result<Difficulty, AppError> {
+  let parsed: Difficulty = match selected {
+    "Trivial" => Difficulty::TRIVIAL,
+    "Easy"    => Difficulty::EASY,
+    "Medium"  => Difficulty::MEDIUM,
+    "Hard"    => Difficulty::HARD,
     _ => Err(AppError::CmdError("Incorrect difficulty value".into()))?
   };
 
@@ -103,12 +81,12 @@ fn parse_task_descriptor(descriptor: String) -> Result<Task, AppError> {
   let mut parts = descriptor.split(",");
   let parts = (parts.next(), parts.next(), parts.next(), parts.next(), parts.next());
   match parts {
-    (Some(text), Some(priority), notes, date, check) => {
+    (Some(text), Some(difficulty), notes, date, check) => {
       return Ok(Task { 
         id: "".into(),
         text: text.into(), 
         task_type: "todo".into(), 
-        priority: priority.parse()?, 
+        difficulty: parse_difficulty(difficulty)?, 
         notes: notes.map(|n| n.into()), 
         date: date.map(|d| OffsetDateTime::parse(d.into(), &ISO8601).unwrap()), 
         checklist: check.map(|c| c.split(";").map(|i| SubTask { text: i.into(), completed: false }).collect())
@@ -150,7 +128,7 @@ fn prompt_for_task() -> Result<Task, AppError> {
     .with_validator(max_length!(60, "Task name must be at most 60 characters."))
     .prompt()?;
 
-  let difficulty = Select::new("Difficulty:", vec!["Trivial", "Easy", "Medium", "Hard"])
+  let difficulty = Select::new("Difficulty:", vec![Difficulty::TRIVIAL, Difficulty::EASY, Difficulty::MEDIUM, Difficulty::HARD])
     .with_vim_mode(true)
     .prompt()?;
 
@@ -169,7 +147,7 @@ fn prompt_for_task() -> Result<Task, AppError> {
     id: "".into(),
     text: name,
     task_type: "todo".into(),
-    priority: parse_difficulty(difficulty)?,
+    difficulty,
     notes: if notes.is_empty() { None } else { Some(notes) },
     date,
     checklist,

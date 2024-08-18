@@ -28,6 +28,9 @@ pub enum AppError {
   #[error(transparent)]
   RecvError(#[from] tokio::sync::oneshot::error::RecvError),
 
+  #[error(transparent)]
+  ThreadError(#[from] tokio::task::JoinError),
+
   #[error("incorrect rights for the requested operation")]
   AclError(String),
 

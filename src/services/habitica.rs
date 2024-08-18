@@ -47,7 +47,6 @@ pub fn run_service(operation: Option<Operation>) -> Result<(), AppError> {
     }
   };
 
-  let _ = runtime.block_on(handle);
-
+  runtime.block_on(handle)??;
   Ok(())
 }
