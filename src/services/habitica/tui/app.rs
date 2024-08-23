@@ -1,6 +1,6 @@
 
 use super::widgets::editor::EditorState;
-use super::widgets::grid::TaskGridState;
+use super::widgets::grid::{TaskGridState, Modification};
 
 use tokio::join;
 use tokio::sync::mpsc;
@@ -71,7 +71,7 @@ impl Habitui<'_> {
             self.grid_state.task_items.insert(0, task);
           }
         }
-        self.grid_state.modified_items = None;
+        self.grid_state.modifications.clear();
       }
     }
   }
@@ -92,24 +92,24 @@ impl Habitui<'_> {
     });
   }
 
-  pub fn handle_submit_edits(&mut self) {
+  pub fn handle_submit_modifications(&mut self) {
     let tx = self.tx.clone();
     let tasks = self.grid_state.task_items.clone();
-    let Some(task_edits) = self.grid_state.modified_items.clone() else {
-      return;
-    };
+    let task_edits = self.grid_state.modifications.clone();
     tokio::spawn(async move {
       let mut handle_set: JoinSet<Task> = JoinSet::new();
-      for (task, completed) in task_edits {
-        let is_modified = tasks.iter().find(|t| *t == &task).is_none();
+      for (id, mods) in task_edits {
+        let task = tasks.iter().find(|t| t.id == id).unwrap().clone();
         handle_set.spawn(async move {
-          let mut update: Task = task.clone();
-          if is_modified {
-            if let Ok(res) = edit_task(task).await {
-              update = res;
+          let mut update: Task = task;
+          for m in mods {
+            match m {
+              Modification::Edit(task) => {
+                let _ = edit_task(task).await.and_then(|res| { update = res; Ok(()) });
+              },
+              _ => {}
             }
           }
-          if completed {}
           update
         });
       }

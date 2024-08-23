@@ -121,6 +121,25 @@ impl<'de> Deserialize<'de> for Difficulty {
   }
 }
 
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq, Hash)]
+pub struct TaskId(String);
+
+impl fmt::Display for TaskId {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", self.0)
+  }
+}
+
+impl TaskId {
+  pub fn empty() -> Self {
+    Self("".into())
+  }
+
+  pub fn is_empty(&self) -> bool {
+    self.0.is_empty()
+  }
+}
+
 #[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct SubTask {
   pub text: String,
@@ -130,7 +149,7 @@ pub struct SubTask {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Task {
   #[serde(rename = "_id")]
-  pub id: String,
+  pub id: TaskId,
   pub text: String,
   #[serde(rename = "type")]
   pub task_type: String,
@@ -148,7 +167,7 @@ pub struct Task {
 impl Default for Task {
   fn default() -> Self {
     Self {
-      id: "".into(),
+      id: TaskId::empty(),
       text: "".into(),
       notes: None,
       task_type: "todo".into(),

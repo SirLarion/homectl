@@ -18,7 +18,7 @@ use reqwest as req;
 
 use crate::error::AppError;
 use crate::util::build_config_path;
-use super::types::{Task, SubTask, Difficulty};
+use super::types::{Task, SubTask, Difficulty, TaskId};
 
 pub const ISO8601: Iso8601 = Iso8601::DEFAULT;
 
@@ -83,7 +83,7 @@ fn parse_task_descriptor(descriptor: String) -> Result<Task, AppError> {
   match parts {
     (Some(text), Some(difficulty), notes, date, check) => {
       return Ok(Task { 
-        id: "".into(),
+        id: TaskId::empty(),
         text: text.into(), 
         task_type: "todo".into(), 
         difficulty: parse_difficulty(difficulty)?, 
@@ -144,7 +144,7 @@ fn prompt_for_task() -> Result<Task, AppError> {
   let checklist = prompt_for_checklist()?;
 
   Ok(Task {
-    id: "".into(),
+    id: TaskId::empty(),
     text: name,
     task_type: "todo".into(),
     difficulty,

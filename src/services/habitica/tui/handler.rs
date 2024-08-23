@@ -218,63 +218,61 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut Habitui) -> Result<(), A
 
   match key_event.code {
     // Exit application on `ESC` or `q`
-    KeyCode::Esc | KeyCode::Char('q') => {
-      app.state = AppState::Exit;
-    }
+    KeyCode::Esc | KeyCode::Char('q') => app.state = AppState::Exit,
 
     // Mark a task or subtask for completion
-    KeyCode::Char(' ') => {
-      app.grid_state.mark_item_completed();
-    }
+    KeyCode::Char(' ') => app.grid_state.mark_item_completed(),
 
     // Submit completed tasks or subtasks
     KeyCode::Enter => {
-      if app.grid_state.modified_items.is_some() {
-        app.handle_submit_edits();
+      if !app.grid_state.modifications.is_empty() {
+        app.handle_submit_modifications();
       }
     }
 
     // Enter editor to create new task or edit an existing one
     KeyCode::Char('a') => {
       app.state = AppState::Editor;
-      app.editor_state = Some(EditorState::new(None))
+      app.editor_state = Some(EditorState::new(None));
     }
     KeyCode::Char('e') => {
       let selected = app.grid_state.get_selected(); 
       if selected.is_some() {
        app.state = AppState::Editor;
-       app.editor_state = Some(EditorState::new(selected))
+       app.editor_state = Some(EditorState::new(selected));
       }
     }
     // Change selection with vim motions
     KeyCode::Char('h') => {
-      app.grid_state.select_next(Direction::LEFT); 
+      match key_event.modifiers {
+        KeyModifiers::ALT  => {},
+        _ => app.grid_state.select_next(Direction::LEFT),
+      };
     }
     KeyCode::Char('j') => {
-      if key_event.modifiers == KeyModifiers::CONTROL {
-        app.grid_state.select_next_sub();
-      } else {
-        app.grid_state.select_next(Direction::DOWN); 
-      }
+      match key_event.modifiers {
+        KeyModifiers::ALT  => {},
+        KeyModifiers::CONTROL => app.grid_state.select_next_sub(),
+        _ => app.grid_state.select_next(Direction::DOWN),
+      };
     }
     KeyCode::Char('k') => {
-      if key_event.modifiers == KeyModifiers::CONTROL {
-        app.grid_state.select_prev_sub();
-      } else {
-        app.grid_state.select_next(Direction::UP); 
-      }
+      match key_event.modifiers {
+        KeyModifiers::ALT  => {},
+        KeyModifiers::CONTROL => app.grid_state.select_prev_sub(),
+        _ => app.grid_state.select_next(Direction::UP),
+      };
     }
     KeyCode::Char('l') => {
-      app.grid_state.select_next(Direction::RIGHT); 
+      match key_event.modifiers {
+        KeyModifiers::ALT => {},
+        _ => app.grid_state.select_next(Direction::RIGHT),
+      }
     }
 
     // Change page
-    KeyCode::Char('J') => {
-      app.grid_state.next_page();
-    }
-    KeyCode::Char('K') => {
-      app.grid_state.prev_page()
-    }
+    KeyCode::Char('J') => app.grid_state.next_page(),
+    KeyCode::Char('K') => app.grid_state.prev_page(),
 
     // Shift-g and gg motions
     KeyCode::Char('g') => {
@@ -287,9 +285,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut Habitui) -> Result<(), A
         app.grid_state.add_mod_key(key_event);
       }
     }
-    KeyCode::Char('G') => {
-      app.grid_state.select_last();
-    }
+    KeyCode::Char('G') => app.grid_state.select_last(),
     _ => {}
   }
   Ok(())
