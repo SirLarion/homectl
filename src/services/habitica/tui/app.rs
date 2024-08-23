@@ -1,4 +1,7 @@
 
+use std::thread::sleep;
+use std::time::Duration;
+
 use super::widgets::editor::EditorState;
 use super::widgets::grid::{TaskGridState, Modification};
 
@@ -59,10 +62,13 @@ impl Habitui<'_> {
       if self.grid_state.task_items.len() == 0 {
         self.grid_state.task_items = tasks;
       } else {
-        let mut iter = self.grid_state.task_items.iter_mut();
         let mut updates: Vec<(Option<usize>, Task)> = Vec::new();
         for task in tasks {
-          updates.push((iter.position(|t| t.id == task.id), task));
+          let i_task = self.grid_state.task_items
+            .iter_mut()
+            .position(|t| t.id == task.id);
+
+          updates.push((i_task, task));
         }
         for (index_of, task) in updates {
           if let Some(index) = index_of {
@@ -96,6 +102,7 @@ impl Habitui<'_> {
     let tx = self.tx.clone();
     let tasks = self.grid_state.task_items.clone();
     let task_edits = self.grid_state.modifications.clone();
+
     tokio::spawn(async move {
       let mut handle_set: JoinSet<Task> = JoinSet::new();
       for (id, mods) in task_edits {

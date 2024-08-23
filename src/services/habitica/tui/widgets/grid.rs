@@ -29,8 +29,6 @@ pub enum Modification {
   Reorder((usize, usize))
 }
 
-type Diff = HashSet<Modification>;
-
 impl PartialEq for Modification {
   fn eq(&self, other: &Self) -> bool {
     use Modification::*;
@@ -56,6 +54,8 @@ impl Hash for Modification {
     state.finish();
   }
 }
+
+type Diff = HashSet<Modification>;
 
 pub struct TaskGridState {
   pub page: usize,
@@ -164,7 +164,7 @@ impl TaskGridState {
     }
   }
 
-  // pub fn move_task(&mut self, )
+  // pub fn change_task_index(&mut self, )
 
   pub fn mark_item_completed(&mut self) {
     let Some(mut task) = self.get_selected().cloned() else {
@@ -178,7 +178,7 @@ impl TaskGridState {
       let subtask_mut = checklist.get_mut(selected_sub).unwrap(); 
       let subtask = subtask_mut.clone();
       let _ = mem::replace(subtask_mut, SubTask { completed: !subtask.completed, ..subtask });
-      self.upsert_modified(id, Modification::Edit(Task { checklist: Some(checklist.clone()), ..task.clone() }));
+      self.upsert_modified(id, Modification::Edit(Task { checklist: Some(checklist.clone()), ..task }));
     } else {
       self.upsert_modified(id, Modification::ToggleComplete);
     }
@@ -202,10 +202,6 @@ impl TaskGridState {
     }
   }
 
-  pub fn find_modification(&self, task: &Task) -> Option<&Diff> {
-    self.modifications.get(&task.id)
-  }
-
   fn upsert_modified(&mut self, id: TaskId, modification: Modification) {
     if let Some(diff) = self.modifications.get_mut(&id) {
       diff.replace(modification);
@@ -214,12 +210,8 @@ impl TaskGridState {
     }
   }
 
-  // fn is_completed(&self, task: &Task) -> bool {
-  //   self.find_modification(task).is_some_and(|(_, mods)| mods.contains(&Modification::Complete(true)))
-  // }
-
   pub fn get_selected(&self) -> Option<&Task> {
-    self.selected.map(|i| self.task_items.get(i).unwrap())
+    self.selected.map(|i| *self.get_all_items().get(i).unwrap())
   }
 
   fn get_selected_checklist(&self) -> Option<&Vec<SubTask>> {
