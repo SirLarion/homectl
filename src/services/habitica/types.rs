@@ -4,7 +4,7 @@ use serde::{Serialize, Deserialize, Serializer, Deserializer, de::{self, Visitor
 use time::{OffsetDateTime, format_description::well_known::Iso8601};
 
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Difficulty {
   TRIVIAL,
   EASY,
@@ -121,13 +121,13 @@ impl<'de> Deserialize<'de> for Difficulty {
   }
 }
 
-#[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct SubTask {
   pub text: String,
   pub completed: bool
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Task {
   #[serde(rename = "_id")]
   pub id: String,

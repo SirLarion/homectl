@@ -12,7 +12,7 @@ use tui_textarea::{TextArea, CursorMove};
 
 use crate::services::habitica::{
   types::{Task, SubTask, Difficulty}, 
-  tui::util::Palette
+  tui::util::{Palette, MOD_KEY_TTL}
 };
 
 #[derive(PartialEq)]
@@ -136,7 +136,7 @@ impl<'e> EditorState<'e> {
   }
 
   pub fn add_mod_key(&mut self, key: KeyEvent) {
-    self.mod_key = Some((key, 100));
+    self.mod_key = Some((key, MOD_KEY_TTL));
   }
  
   pub fn pop_mod_key(&mut self) -> Option<KeyEvent> {

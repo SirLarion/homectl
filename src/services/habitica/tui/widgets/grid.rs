@@ -1,3 +1,4 @@
+use std::mem;
 use std::cmp::max;
 
 use crossterm::event::KeyEvent;
@@ -9,8 +10,8 @@ use ratatui::{
 };
 
 use crate::services::habitica::{
-  types::Task,
-  tui::util::{Direction, Palette}
+  types::{Task, SubTask},
+  tui::util::{Direction, Palette, MOD_KEY_TTL}
 };
 
 const GRID_WIDTH: usize = 3;
@@ -23,7 +24,7 @@ pub struct TaskGridState {
   pub selected_sub: Option<usize>,
   pub task_items: Vec<Task>,
   pub loading: bool,
-  pub modified_items: Option<Vec<Task>>,
+  pub modified_items: Option<Vec<(Task, bool)>>,
   pub mod_key: Option<(KeyEvent, u32)>,
 }
 
@@ -83,33 +84,59 @@ impl TaskGridState {
     }
   } 
 
+  fn get_all_items(&self) -> Vec<&Task> {
+    self.task_items.iter().map(|t| {
+      self.find_modified(t).map(|t| &t.0).unwrap_or(t)
+    }).collect()
+  }
+
   pub fn select_next_sub(&mut self) {
-    if let Some(selected) = self.selected {
-      let task = self.task_items.get(usize::from(selected)).unwrap();
-      if let Some(checklist) = &task.checklist {
-        if !checklist.is_empty() {
-          if let Some(selected_sub) = self.selected_sub {
-            self.selected_sub = Some((selected_sub + 1) % checklist.len())
-          } else {
-            self.selected_sub = Some(0);
-          }
-        }
-      }
+    let Some(checklist) = self.get_selected_checklist() else {
+      return;
+    };
+    if let Some(selected_sub) = self.selected_sub {
+      self.selected_sub = Some((selected_sub + 1) % checklist.len())
+    } else {
+      self.selected_sub = Some(0);
     }
   }
 
   pub fn select_prev_sub(&mut self) {
-    if let Some(selected) = self.selected {
-      let task = self.task_items.get(usize::from(selected)).unwrap();
-      if let Some(checklist) = &task.checklist {
-        if !checklist.is_empty() {
-          if let Some(selected_sub) = self.selected_sub {
-            self.selected_sub = Some(selected_sub.saturating_sub(1))
-          } else {
-            self.selected_sub = Some(0);
-          }
-        }
+    let Some(checklist) = self.get_selected_checklist() else {
+      return;
+    };
+    if let Some(selected_sub) = self.selected_sub {
+      if let Some(valid_i) = selected_sub.checked_sub(1) {
+        self.selected_sub = Some(valid_i);
+      } else {
+        self.selected_sub = Some(checklist.len() - 1);
       }
+    } else {
+      self.selected_sub = Some(0);
+    }
+  }
+
+  pub fn mark_item_completed(&mut self) {
+    let Some(mut task) = self.get_selected().cloned() else {
+      return;
+    };
+    let completed: bool;
+    if let Some((task_mod, task_completed)) = self.find_modified(&task) {
+      task = task_mod.clone();
+      completed = *task_completed;
+    } else {
+      completed = false;
+    }
+    if let Some(selected_sub) = self.selected_sub {
+      let Some(checklist) = task.checklist.as_mut() else {
+        return;
+      };
+      let subtask_mut = checklist.get_mut(selected_sub).unwrap(); 
+      let subtask = subtask_mut.clone();
+      let _ = mem::replace(subtask_mut, SubTask { completed: !subtask.completed, ..subtask });
+      self.upsert_modified(Task { checklist: Some(checklist.clone()), ..task.clone() }, completed);
+    } else {
+      self.upsert_modified(task, !completed);
     }
   }
 
@@ -131,11 +158,30 @@ impl TaskGridState {
     }
   }
 
-  pub fn find_modified(&self, task: &Task) -> Option<&Task> {
+  pub fn find_modified(&self, task: &Task) -> Option<&(Task, bool)> {
     if let Some(modified) = &self.modified_items {
-      modified.iter().find(|t| t.id == task.id)
+      modified.iter().find(|t| t.0.id == task.id)
     } else {
       None
+    }
+  }
+
+  fn upsert_modified(&mut self, task: Task, completed: bool) {
+    if let Some(modified) = self.modified_items.as_mut() {
+      if let Some((i, _)) = modified.iter().enumerate().find(|t| t.1.0.id == task.id) {
+        if let None = self.task_items.iter().find(|t| *t == &task) {
+          let _ = mem::replace(&mut modified[i], (task, completed));
+        } else {
+          modified.remove(i);
+          if modified.is_empty() {
+            self.modified_items = None;
+          }
+        }
+      } else {
+        modified.push((task, completed));
+      }
+    } else {
+      self.modified_items = Some(vec![(task, completed)]);
     }
   }
 
@@ -143,8 +189,14 @@ impl TaskGridState {
     self.selected.map(|i| self.task_items.get(i).unwrap())
   }
 
+  fn get_selected_checklist(&self) -> Option<&Vec<SubTask>> {
+    self.get_selected().and_then(|task| {
+      task.checklist.as_ref().filter(|l| !l.is_empty())
+    })
+  }
+
   pub fn add_mod_key(&mut self, key: KeyEvent) {
-    self.mod_key = Some((key, 100));
+    self.mod_key = Some((key, MOD_KEY_TTL));
   }
  
   pub fn pop_mod_key(&mut self) -> Option<KeyEvent> {
@@ -189,7 +241,7 @@ impl StatefulWidget for TaskGrid {
 
         let index = state.page * GRID_WIDTH * GRID_HEIGHT + j * GRID_WIDTH + i;
 
-        if let Some(task) = state.task_items.get(index) {
+        if let Some(task) = state.get_all_items().get(index) {
           let mod_task_opt = state.find_modified(task);
           let is_modified = mod_task_opt.is_some();
           let is_selected = Some(index) == state.selected;
@@ -204,11 +256,11 @@ impl StatefulWidget for TaskGrid {
             }
           };
 
-          let rendered_task = if let Some(mod_task) = mod_task_opt {
-            mod_task
+          let (rendered_task, completed) = if let Some((mod_task, completed)) = mod_task_opt {
+            (mod_task, *completed)
           }
           else {
-            task
+            (*task, false)
           };
 
           let block = Block::default()
@@ -220,15 +272,20 @@ impl StatefulWidget for TaskGrid {
           block.render(cell, buf);
 
           for (i, line_str) in rendered_task.to_string().split("\n").enumerate() {
-            let mut line = Line::from(line_str).style(style);
+            let mut line_style = style;
             let y = inner.y + i as u16;
-            if let Some(sub) = state.selected_sub {
-              if is_selected && i.wrapping_sub(2) == sub {
-                line = line.style(Style::default().bg(Palette::GREEN2.into()));
+            if let Some(subtask_i) = state.selected_sub {
+              if is_selected && i.wrapping_sub(2) == subtask_i {
+                line_style = Style::default().bg(Palette::GREEN2.into());
               }
             }
             if y < max_y {
-              buf.set_line(inner.x, y, &line, inner.width);
+              Paragraph::new(line_str)
+                .style(line_style)
+                .render(Rect { x: inner.x, y, width: inner.width - 2, height: 1 }, buf);
+            }
+            if i == 0 && completed {
+              buf.set_string(inner.x + rendered_task.text.len() as u16 + 1, y, "✅", line_style);
             }
           }
         }

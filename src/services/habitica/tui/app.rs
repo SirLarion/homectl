@@ -1,8 +1,11 @@
+
 use super::widgets::editor::EditorState;
 use super::widgets::grid::TaskGridState;
 
+use tokio::join;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Sender, Receiver};
+use tokio::task::{JoinHandle, JoinSet};
 
 use crate::services::habitica::util::{get_task_list, edit_task, post_created_task};
 use crate::services::habitica::types::Task;
@@ -88,6 +91,36 @@ impl Habitui<'_> {
     });
   }
 
+  pub fn handle_submit_edits(&mut self) {
+    let tx = self.tx.clone();
+    let tasks = self.grid_state.task_items.clone();
+    let Some(task_edits) = self.grid_state.modified_items.take() else {
+      return;
+    };
+    tokio::spawn(async move {
+      let mut handle_set: JoinSet<Task> = JoinSet::new();
+      for (task, completed) in task_edits {
+        let is_modified = tasks.iter().find(|t| *t == &task).is_none();
+        handle_set.spawn(async move {
+          let mut update: Task = task.clone();
+          if is_modified {
+            if let Ok(res) = edit_task(task).await {
+              update = res;
+            }
+          }
+          if completed {}
+          update
+        });
+      }
+      let mut updates: Vec<Task> = Vec::new();
+      while let Some(res) = handle_set.join_next().await {
+        if let Ok(task) = res {
+          updates.push(task)
+        }
+      }
+      if let Err(_) = tx.send(updates).await {}
+    });
+  }
 
   pub fn is_running(&self) -> bool {
     self.state != AppState::Exit

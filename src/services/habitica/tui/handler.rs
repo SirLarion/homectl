@@ -221,8 +221,19 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut Habitui) -> Result<(), A
     KeyCode::Esc | KeyCode::Char('q') => {
       app.state = AppState::Exit;
     }
-    KeyCode::Tab => {
+
+    // Mark a task or subtask for completion
+    KeyCode::Char(' ') => {
+      app.grid_state.mark_item_completed();
     }
+
+    // Submit completed tasks or subtasks
+    KeyCode::Enter => {
+      if app.grid_state.modified_items.is_some() {
+        app.handle_submit_edits();
+      }
+    }
+
     // Enter editor to create new task or edit an existing one
     KeyCode::Char('a') => {
       app.state = AppState::Editor;

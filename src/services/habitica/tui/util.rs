@@ -40,3 +40,5 @@ impl Into<Color> for Palette {
     Color::from_u32(self as u32)
   }
 }
+
+pub const MOD_KEY_TTL: u32 = 50;

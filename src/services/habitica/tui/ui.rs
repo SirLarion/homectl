@@ -30,7 +30,7 @@ fn render_footer(f: &mut Frame, area: Rect) {
     .border_type(BorderType::Rounded)
     .padding(Padding::horizontal(2));
 
-  f.render_widget(Paragraph::new("q: quit | hjkl: navigate | b: bluupi")
+  f.render_widget(Paragraph::new("q: quit | hjkl: navigate | a: create task | e: edit task | space: mark completed | enter: submit edit")
     .block(block), area);
 }
 
