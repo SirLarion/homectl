@@ -71,6 +71,7 @@ impl Habitui<'_> {
             self.grid_state.task_items.insert(0, task);
           }
         }
+        self.grid_state.modified_items = None;
       }
     }
   }
@@ -94,7 +95,7 @@ impl Habitui<'_> {
   pub fn handle_submit_edits(&mut self) {
     let tx = self.tx.clone();
     let tasks = self.grid_state.task_items.clone();
-    let Some(task_edits) = self.grid_state.modified_items.take() else {
+    let Some(task_edits) = self.grid_state.modified_items.clone() else {
       return;
     };
     tokio::spawn(async move {
