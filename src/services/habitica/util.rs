@@ -31,6 +31,7 @@ struct SingleRes<T> {
   data: T,
 }
 
+#[cfg(not(debug_assertions))]
 const HABITICA_API_ENDPOINT: &str = "https://habitica.com/api/v3";
 
 fn get_json_path() -> Result<String, AppError> {
@@ -46,6 +47,7 @@ fn get_env_vars() -> Result<(String, String, String), AppError> {
   ))
 }
 
+#[cfg(not(debug_assertions))]
 fn get_headers() -> Result<HeaderMap, AppError> {
   let (id, token, xclient) = get_env_vars()?;
 
@@ -203,7 +205,7 @@ pub async fn post_created_task(task: Task) -> Result<Task, AppError> {
 }
 
 #[cfg(debug_assertions)]
-pub async fn edit_task(task: Task) -> Result<Task, AppError> {
+pub async fn edit_task(task: &Task) -> Result<&Task, AppError> {
   let path = get_json_path()?;
   let data = fs::read_to_string(path)?;
   let mut tasks = serde_json::from_str::<ArrayRes<Task>>(data.as_str())?.data;
@@ -225,12 +227,12 @@ pub async fn edit_task(task: Task) -> Result<Task, AppError> {
 }
 
 #[cfg(not(debug_assertions))]
-pub async fn edit_task(task: Task) -> Result<Task, AppError> {
+pub async fn edit_task(task: &Task) -> Result<Task, AppError> {
   let client = req::Client::new();
   let headers = get_headers()?;
   let res = client
     .put(format!("{HABITICA_API_ENDPOINT}/tasks/{}", task.id))
-    .json::<Task>(&task)
+    .json::<Task>(task)
     .headers(headers)
     .send().await?
     .error_for_status()?;
@@ -239,25 +241,109 @@ pub async fn edit_task(task: Task) -> Result<Task, AppError> {
   Ok(created.data)
 }
 
+#[cfg(debug_assertions)]
+pub async fn remove_task(task_id: TaskId) -> Result<Task, AppError> {
+  let path = get_json_path()?;
+  let data = fs::read_to_string(path)?;
+  let mut tasks = serde_json::from_str::<ArrayRes<Task>>(data.as_str())?.data;
+
+  let mut iter = tasks.iter_mut();
+  let task = iter.position(|t| t.id == task_id)
+    .and_then(|i| Some(tasks.remove(i)))
+    .ok_or(AppError::ServiceError(format!("Task with ID: {task_id} not found")))?;
+
+  let mut file = File::create(get_json_path()?)?; 
+  let data = serde_json::to_string(&ArrayRes { data: tasks })?;
+  file.write_all(data.as_bytes())?;
+
+  Ok(task)
+}
+
+#[cfg(not(debug_assertions))]
+pub async fn remove_task(task_id: TaskId) -> Result<Task, AppError> {
+  let client = req::Client::new();
+  let headers = get_headers()?;
+  let res = client
+    .delete(format!("{HABITICA_API_ENDPOINT}/tasks/{}", task_id))
+    .headers(headers)
+    .send().await?
+    .error_for_status()?;
+
+  let removed = serde_json::from_str::<SingleRes<Task>>(&res.text().await?)?;
+  Ok(removed.data)
+}
+
+#[cfg(debug_assertions)]
+pub async fn complete_task(task_id: TaskId) -> Result<(), AppError> {
+  remove_task(task_id).await?;
+  Ok(())
+}
+
+#[cfg(not(debug_assertions))]
+pub async fn complete_task(task_id: TaskId) -> Result<(), AppError> {
+  let client = req::Client::new();
+  let headers = get_headers()?;
+  let res = client
+    .post(format!("{HABITICA_API_ENDPOINT}/tasks/{}/score/up", task_id))
+    .headers(headers)
+    .send().await?
+    .error_for_status()?;
+
+  Ok(())
+}
+
+#[cfg(debug_assertions)]
+pub async fn reorder_task(task_id: TaskId, index: usize) -> Result<(), AppError> {
+  let path = get_json_path()?;
+  let data = fs::read_to_string(path)?;
+  let mut tasks = serde_json::from_str::<ArrayRes<Task>>(data.as_str())?.data;
+
+  let mut iter = tasks.iter_mut();
+  let task = iter.position(|t| t.id == task_id)
+    .and_then(|i| Some(tasks.remove(i)))
+    .ok_or(AppError::ServiceError(format!("Task with ID: {task_id} not found")))?;
+
+  tasks.remove(index);
+  tasks.insert(index, task);
+
+  let mut file = File::create(get_json_path()?)?; 
+  let data = serde_json::to_string(&ArrayRes { data: tasks })?;
+  file.write_all(data.as_bytes())?;
+
+  Ok(())
+}
+
+#[cfg(not(debug_assertions))]
+pub async fn reorder_task(task_id: TaskId, index: usize) -> Result<(), AppError> {
+  let client = req::Client::new();
+  let headers = get_headers()?;
+  let res = client
+    .post(format!("{HABITICA_API_ENDPOINT}/tasks/{}/move/to/{}", task_id, index))
+    .headers(headers)
+    .send().await?
+    .error_for_status()?;
+
+  Ok(())
+}
+
 /// Mock version of the fetch_tasks function to avoid unnecessary API calls.
 /// Reads data from ~/.config/hutctl/habitica_tasks.json and will fail if such
 /// a file does not exist
 #[cfg(debug_assertions)]
-async fn fetch_tasks() -> Result<ArrayRes<Task>, AppError> {
+async fn fetch_tasks() -> Result<String, AppError> {
   let path = get_json_path()?;
   let data = fs::read_to_string(path)?;
-  let tasks = serde_json::from_str::<ArrayRes<Task>>(data.as_str())?;
 
   // Artificial delay
   sleep(Duration::from_millis(500)).await;
 
-  Ok(tasks)
+  Ok(data)
 }
 
 /// Fetch all tasks of type: todo from Habitica API. For our purposes a "todo"
 /// task is the same as a task in general
 #[cfg(not(debug_assertions))]
-async fn fetch_tasks() -> Result<ArrayRes<Task>, AppError> {
+async fn fetch_tasks() -> Result<String, AppError> {
   let client = req::Client::new();
   let headers = get_headers()?;
   let res = client
@@ -266,27 +352,26 @@ async fn fetch_tasks() -> Result<ArrayRes<Task>, AppError> {
     .send()
     .await?;
 
-  let tasks = serde_json::from_str::<ArrayRes<Task>>(&res.text().await?)?;
-
-  Ok(tasks)
+  Ok(res.text().await?)
 }
 
 pub async fn get_task_list() -> Result<Vec<Task>, AppError> {
-  let deserialized = fetch_tasks().await?;
-  Ok(deserialized.data)
+  let raw_tasks = fetch_tasks().await?;
+  let tasks = serde_json::from_str::<ArrayRes<Task>>(raw_tasks.as_str())?.data;
+  Ok(tasks)
 }
 
 pub async fn list_tasks(save_json: bool) -> Result<(), AppError> {
-  let deserialized = fetch_tasks().await?;
+  let raw_tasks = fetch_tasks().await?;
+  let tasks = serde_json::from_str::<ArrayRes<Task>>(raw_tasks.as_str())?.data;
 
-  for task in &deserialized.data {
+  for task in tasks {
     println!("{task}");
   }
 
   if save_json {
     let mut file = File::create(get_json_path()?)?; 
-    let data = serde_json::to_string(&deserialized)?;
-    file.write_all(data.as_bytes())?;
+    file.write_all(raw_tasks.as_bytes())?;
     println!("\nSaved list to ~/.config/habitica_tasks.json");
   }
 

@@ -1,17 +1,12 @@
-
-use std::thread::sleep;
-use std::time::Duration;
-
 use super::widgets::editor::EditorState;
-use super::widgets::grid::{TaskGridState, Modification};
+use super::widgets::grid::TaskGridState;
 
-use tokio::join;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Sender, Receiver};
 use tokio::task::{JoinHandle, JoinSet};
 
-use crate::services::habitica::util::{get_task_list, edit_task, post_created_task};
-use crate::services::habitica::types::Task;
+use crate::services::habitica::util::{get_task_list, edit_task, post_created_task, complete_task, reorder_task, remove_task};
+use crate::services::habitica::types::{Task, Action};
 
 #[derive(PartialEq)]
 pub enum AppState {
@@ -24,15 +19,15 @@ pub struct Habitui<'e> {
   pub state: AppState,
   pub grid_state: TaskGridState,
   pub editor_state: Option<EditorState<'e>>,
-  pub tx: Sender<Vec<Task>>,
-  pub rx: Receiver<Vec<Task>>,
+  pub tx: Sender<Vec<(Task, Action)>>,
+  pub rx: Receiver<Vec<(Task, Action)>>,
   pub should_refresh_tasks: bool,
   pub log_debug: Option<(String, u32)>,
 }
 
 impl Default for Habitui<'_> {
   fn default() -> Self { 
-    let (tx, rx) = mpsc::channel::<Vec<Task>>(1);
+    let (tx, rx) = mpsc::channel::<Vec<(Task, Action)>>(1);
     Self {
       state: AppState::List,
       grid_state: TaskGridState::default(),
@@ -54,27 +49,38 @@ impl Habitui<'_> {
 
       tokio::spawn(async move {
         if let Ok(tasks_res) = get_task_list().await {
-          if let Err(_) = tx.send(tasks_res).await {}
+          let tasks_msg = tasks_res.into_iter().map(|t| (t, Action::Create)).collect();
+          if let Err(_) = tx.send(tasks_msg).await {}
         }
       });
     }
     if let Ok(tasks) = self.rx.try_recv() {
       if self.grid_state.task_items.len() == 0 {
-        self.grid_state.task_items = tasks;
+        self.grid_state.task_items = tasks.into_iter()
+          .map(|(t, _)| t)
+          .collect();
       } else {
-        let mut updates: Vec<(Option<usize>, Task)> = Vec::new();
+        let mut updates: Vec<(Option<usize>, (Task, Action))> = Vec::new();
         for task in tasks {
           let i_task = self.grid_state.task_items
             .iter_mut()
-            .position(|t| t.id == task.id);
+            .position(|t| t.id == task.0.id);
 
           updates.push((i_task, task));
         }
-        for (index_of, task) in updates {
-          if let Some(index) = index_of {
-            let _ = std::mem::replace(&mut self.grid_state.task_items[index], task);
-          } else {
-            self.grid_state.task_items.insert(0, task);
+        for (index_of, (task, action)) in updates {
+          let exists = index_of.is_some();
+          match action {
+            Action::Create => {
+              self.grid_state.task_items.insert(0, task);
+            },
+            Action::ToggleComplete | Action::Remove if exists => {
+              self.grid_state.task_items.remove(index_of.unwrap());
+            },
+            Action::Edit(_) if exists => {
+              let _ = std::mem::replace(&mut self.grid_state.task_items[index_of.unwrap()], task);
+            },
+            _ => {}
           }
         }
         self.grid_state.modifications.clear();
@@ -88,11 +94,11 @@ impl Habitui<'_> {
     tokio::spawn(async move {
       if task.id.is_empty() {
         if let Ok(create_res) = post_created_task(task).await {
-          if let Err(_) = tx.send(vec![create_res]).await {}
+          if let Err(_) = tx.send(vec![(create_res, Action::Create)]).await {}
         }
       } else {
-        if let Ok(update_res) = edit_task(task).await {
-          if let Err(_) = tx.send(vec![update_res]).await {}
+        if let Ok(update_res) = edit_task(&task).await {
+          if let Err(_) = tx.send(vec![(update_res.clone(), Action::Edit(task))]).await {}
         }
       }
     });
@@ -104,26 +110,46 @@ impl Habitui<'_> {
     let task_edits = self.grid_state.modifications.clone();
 
     tokio::spawn(async move {
-      let mut handle_set: JoinSet<Task> = JoinSet::new();
+      let mut handle_set: JoinSet<(Task, Vec<Action>)> = JoinSet::new();
       for (id, mods) in task_edits {
         let task = tasks.iter().find(|t| t.id == id).unwrap().clone();
         handle_set.spawn(async move {
-          let mut update: Task = task;
+          let mut update: (Task, Vec<Action>) = (task, Vec::new());
           for m in mods {
             match m {
-              Modification::Edit(task) => {
-                let _ = edit_task(task).await.and_then(|res| { update = res; Ok(()) });
+              Action::Edit(m_task) => {
+                let _ = edit_task(&m_task)
+                  .await
+                  .and_then(|res| { 
+                    update.0 = res.clone(); 
+                    update.1.push(Action::Edit(m_task.clone())); 
+                    Ok(()) 
+                  });
               },
+              Action::ToggleComplete => {
+                let _ = complete_task(id.clone()).await;
+                update.1.push(Action::ToggleComplete);
+              }
+              Action::Reorder(o) => {
+                let _ = reorder_task(id.clone(), o.1).await;
+                update.1.push(Action::Reorder(o));
+              }
+              Action::Remove => {
+                let _ = remove_task(id.clone()).await;
+                update.1.push(Action::Remove);
+              }
               _ => {}
             }
           }
           update
         });
       }
-      let mut updates: Vec<Task> = Vec::new();
+      let mut updates: Vec<(Task, Action)> = Vec::new();
       while let Some(res) = handle_set.join_next().await {
-        if let Ok(task) = res {
-          updates.push(task)
+        if let Ok((task, actions)) = res {
+          for a in actions {
+            updates.push((task.clone(), a));
+          }
         }
       }
       if let Err(_) = tx.send(updates).await {}

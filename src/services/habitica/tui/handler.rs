@@ -245,31 +245,34 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut Habitui) -> Result<(), A
     // Change selection with vim motions
     KeyCode::Char('h') => {
       match key_event.modifiers {
-        KeyModifiers::ALT  => {},
-        _ => app.grid_state.select_next(Direction::LEFT),
+        KeyModifiers::ALT     => app.grid_state.move_task(Direction::LEFT),
+                            _ => app.grid_state.select_next(Direction::LEFT),
       };
     }
     KeyCode::Char('j') => {
       match key_event.modifiers {
-        KeyModifiers::ALT  => {},
+        KeyModifiers::ALT     => app.grid_state.move_task(Direction::DOWN),
         KeyModifiers::CONTROL => app.grid_state.select_next_sub(),
-        _ => app.grid_state.select_next(Direction::DOWN),
+                            _ => app.grid_state.select_next(Direction::DOWN),
       };
     }
     KeyCode::Char('k') => {
       match key_event.modifiers {
-        KeyModifiers::ALT  => {},
+        KeyModifiers::ALT     => app.grid_state.move_task(Direction::UP),
         KeyModifiers::CONTROL => app.grid_state.select_prev_sub(),
-        _ => app.grid_state.select_next(Direction::UP),
+                            _ => app.grid_state.select_next(Direction::UP),
       };
     }
     KeyCode::Char('l') => {
       match key_event.modifiers {
-        KeyModifiers::ALT => {},
-        _ => app.grid_state.select_next(Direction::RIGHT),
+        KeyModifiers::ALT     => app.grid_state.move_task(Direction::RIGHT),
+                            _ => app.grid_state.select_next(Direction::RIGHT),
       }
     }
 
+    // Remove task
+    KeyCode::Char('d') => app.grid_state.mark_item_removed(),
+      
     // Change page
     KeyCode::Char('J') => app.grid_state.next_page(),
     KeyCode::Char('K') => app.grid_state.prev_page(),
@@ -286,6 +289,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut Habitui) -> Result<(), A
       }
     }
     KeyCode::Char('G') => app.grid_state.select_last(),
+
     _ => {}
   }
   Ok(())

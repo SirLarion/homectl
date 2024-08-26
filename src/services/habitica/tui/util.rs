@@ -15,7 +15,7 @@ pub enum Palette {
   BG2     = 0x00f0f0f0, // #f0f0f0
   GREEN   = 0x00e3f2c4, // #e3f2c4 
   GREEN2  = 0x00c7dba0, // #c7dba0 
-  RED,
+  RED     = 0x00f7bbc0, // #f7bbc0
   YELLOW  = 0x00fae4c4, // #fae4c4
   YELLOW2 = 0x00ddcda6, // #ddcda6
   CURSOR  = 0x00FF6900, // #ff6900

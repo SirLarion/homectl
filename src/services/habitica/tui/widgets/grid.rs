@@ -2,7 +2,6 @@ use std::{
   mem, 
   collections::{HashSet, HashMap},
   cmp::max,
-  hash::{Hash, Hasher}
 };
 
 use crossterm::event::KeyEvent;
@@ -14,7 +13,7 @@ use ratatui::{
 };
 
 use crate::services::habitica::{
-  types::{Task, SubTask, TaskId},
+  types::{Task, SubTask, TaskId, Action},
   tui::util::{Direction, Palette, MOD_KEY_TTL}
 };
 
@@ -22,40 +21,8 @@ const GRID_WIDTH: usize = 3;
 const GRID_HEIGHT: usize = 3;
 const GRID_SIZE: usize = GRID_WIDTH * GRID_HEIGHT;
 
-#[derive(Clone)]
-pub enum Modification {
-  ToggleComplete,
-  Edit(Task),
-  Reorder((usize, usize))
-}
 
-impl PartialEq for Modification {
-  fn eq(&self, other: &Self) -> bool {
-    use Modification::*;
-    match (self, other) {
-      (ToggleComplete, ToggleComplete) => true, 
-      (Edit(_), Edit(_)) => true,
-      (Reorder(_), Reorder(_)) => true,
-      _ => false
-    }
-  }
-}
-
-impl Eq for Modification {}
-
-impl Hash for Modification {
-  fn hash<H: Hasher>(&self, state: &mut H) {
-    use Modification::*;
-    match self {
-      ToggleComplete => state.write(&[0]), 
-      Edit(_) => state.write(&[1]),
-      Reorder(_) => state.write(&[2]),
-    };   
-    state.finish();
-  }
-}
-
-type Diff = HashSet<Modification>;
+type Diff = HashSet<Action>;
 
 pub struct TaskGridState {
   pub page: usize,
@@ -129,7 +96,7 @@ impl TaskGridState {
         let mut task = t;
         for m in mods {
           match m {
-            Modification::Edit(m_task) => task = m_task,
+            Action::Edit(m_task) => task = m_task,
             _ => {}
           }
         }
@@ -164,7 +131,19 @@ impl TaskGridState {
     }
   }
 
-  // pub fn change_task_index(&mut self, )
+  pub fn move_task(&mut self, direction: Direction) {
+    let Some(selected) = self.selected else {
+      return; 
+    };
+
+    self.select_next(direction);
+    let next_selected = self.selected.unwrap();
+    let task = self.task_items.remove(selected);
+
+    self.upsert_modified(task.id.clone(), Action::Reorder((selected, next_selected))); 
+    self.task_items.insert(next_selected, task);
+
+  }
 
   pub fn mark_item_completed(&mut self) {
     let Some(mut task) = self.get_selected().cloned() else {
@@ -178,10 +157,17 @@ impl TaskGridState {
       let subtask_mut = checklist.get_mut(selected_sub).unwrap(); 
       let subtask = subtask_mut.clone();
       let _ = mem::replace(subtask_mut, SubTask { completed: !subtask.completed, ..subtask });
-      self.upsert_modified(id, Modification::Edit(Task { checklist: Some(checklist.clone()), ..task }));
+      self.upsert_modified(id, Action::Edit(Task { checklist: Some(checklist.clone()), ..task }));
     } else {
-      self.upsert_modified(id, Modification::ToggleComplete);
+      self.upsert_modified(id, Action::ToggleComplete);
     }
+  }
+
+  pub fn mark_item_removed(&mut self) {
+    let Some(task) = self.get_selected().cloned() else {
+      return;
+    };
+    self.upsert_modified(task.id, Action::Remove);
   }
 
   pub fn next_page(&mut self) {
@@ -202,8 +188,19 @@ impl TaskGridState {
     }
   }
 
-  fn upsert_modified(&mut self, id: TaskId, modification: Modification) {
+  fn upsert_modified(&mut self, id: TaskId, modification: Action) {
     if let Some(diff) = self.modifications.get_mut(&id) {
+      if diff.contains(&modification) {
+        match modification {
+          Action::ToggleComplete => { diff.remove(&modification); },
+          Action::Remove         => { diff.remove(&modification); },
+                               _ => { diff.replace(modification); }
+        };
+        if diff.is_empty() {
+          self.modifications.remove(&id);
+        }
+        return;
+      }
       diff.replace(modification);
     } else {
       self.modifications.insert(id, HashSet::from([modification]));
@@ -268,17 +265,15 @@ impl StatefulWidget for TaskGrid {
 
         if let Some(task) = state.get_all_items().get(index).as_deref() {
           let mod_task_opt = state.modifications.get(&task.id);
-          let is_modified = mod_task_opt.is_some();
           let is_selected = Some(index) == state.selected;
+          let is_modified = mod_task_opt.is_some();
+          let is_remove = mod_task_opt.is_some_and(|set| set.contains(&Action::Remove));
 
-          let style = if is_selected {
-            Style::default().bg(Palette::GREEN.into())
-          } else {
-            if is_modified {
-              Style::default().bg(Palette::YELLOW.into())
-            } else {
-              Style::default().bg(Palette::BG2.into())
-            }
+          let style = match (is_selected, is_modified, is_remove) {
+            (true, _ , _)    => Style::default().bg(Palette::GREEN.into()),
+            (_, _, true)     => Style::default().bg(Palette::RED.into()),
+            (_, true, _)     => Style::default().bg(Palette::YELLOW.into()),
+                           _ => Style::default().bg(Palette::BG2.into())
           };
 
           let (rendered_task, completed) = mod_task_opt.map_or((*task, false), |set| {
@@ -286,8 +281,8 @@ impl StatefulWidget for TaskGrid {
             let mut completed = false;
             for m in set.iter() {
               match m {
-                Modification::Edit(m_task) => t = m_task,
-                Modification::ToggleComplete => completed = true,
+                Action::Edit(m_task) => t = m_task,
+                Action::ToggleComplete => completed = true,
                 _ => {}
               }
             }

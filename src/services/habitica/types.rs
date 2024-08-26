@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::fmt;
 
 use serde::{Serialize, Deserialize, Serializer, Deserializer, de::{self, Visitor}};
@@ -140,6 +141,10 @@ impl TaskId {
   }
 }
 
+fn skip_serialize_in_prod(_id: &TaskId) -> bool {
+  cfg!(not(debug_assertions))
+}
+
 #[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct SubTask {
   pub text: String,
@@ -148,7 +153,7 @@ pub struct SubTask {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Task {
-  #[serde(rename = "_id")]
+  #[serde(rename = "_id", skip_serializing_if = "skip_serialize_in_prod")]
   pub id: TaskId,
   pub text: String,
   #[serde(rename = "type")]
@@ -197,5 +202,44 @@ impl fmt::Display for Task {
       }
     }
     write!(f, "\n")
+  }
+}
+
+#[derive(Clone)]
+pub enum Action {
+  Create,
+  ToggleComplete,
+  Edit(Task),
+  Reorder((usize, usize)),
+  Remove
+}
+
+impl PartialEq for Action {
+  fn eq(&self, other: &Self) -> bool {
+    use Action::*;
+    match (self, other) {
+      (ToggleComplete, ToggleComplete) => true, 
+      (Edit(_), Edit(_)) => true,
+      (Reorder(_), Reorder(_)) => true,
+      (Remove, Remove) => true,
+      (Create, Create) => true, 
+      _ => false
+    }
+  }
+}
+
+impl Eq for Action {}
+
+impl Hash for Action {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    use Action::*;
+    match self {
+      ToggleComplete => state.write(&[0]), 
+      Edit(_) => state.write(&[1]),
+      Reorder(_) => state.write(&[2]),
+      Remove => state.write(&[3]),
+      Create => state.write(&[4]),
+    };   
+    state.finish();
   }
 }

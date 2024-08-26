@@ -219,7 +219,7 @@ impl<'e> EditorState<'e> {
   }
 
   pub fn new(task_option: Option<&Task>) -> Self {
-    let (name, notes, mut subtasks, task) = match task_option {
+    let (name, notes, mut subtasks, task, mode) = match task_option {
       Some(task) => {
         let notes_content = if let Some(n) = &task.notes { 
           n.split("\n").map(|n| n.to_string()).collect() 
@@ -237,7 +237,7 @@ impl<'e> EditorState<'e> {
         let name = build_input_field(vec![task.text.clone()], false);
         let notes = build_input_field(notes_content, false);
 
-        (name, notes, subtasks, task.clone())
+        (name, notes, subtasks, task.clone(), EditorMode::Normal)
       }, 
       None => {
         let mut name = build_input_field(Vec::new(), false);
@@ -246,7 +246,7 @@ impl<'e> EditorState<'e> {
         let mut notes = build_input_field(Vec::new(), false);
         notes.set_placeholder_text("--- Notes ---");
 
-        (name, notes, Vec::new(), Task::default())
+        (name, notes, Vec::new(), Task::default(), EditorMode::Insert)
       }
     };
 
@@ -256,7 +256,7 @@ impl<'e> EditorState<'e> {
 
     Self {
       task,
-      mode: EditorMode::Normal,
+      mode,
       focus: Some(0), 
       date_focus: None,
       fields,
