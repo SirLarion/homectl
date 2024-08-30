@@ -243,3 +243,9 @@ impl Hash for Action {
     state.finish();
   }
 }
+
+impl Action {
+  pub fn is_destructive(&self) -> bool {
+    self == &Action::ToggleComplete || self == &Action::Remove
+  }
+}

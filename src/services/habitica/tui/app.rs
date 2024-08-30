@@ -3,9 +3,10 @@ use super::widgets::grid::TaskGridState;
 
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Sender, Receiver};
-use tokio::task::{JoinHandle, JoinSet};
+use tokio::task::JoinSet;
 
-use crate::services::habitica::util::{get_task_list, edit_task, post_created_task, complete_task, reorder_task, remove_task};
+use crate::services::habitica::util::get_task_list;
+use crate::services::habitica::request::{edit_task, post_created_task, complete_task, reorder_task, remove_task};
 use crate::services::habitica::types::{Task, Action};
 
 #[derive(PartialEq)]
@@ -114,34 +115,38 @@ impl Habitui<'_> {
       for (id, mods) in task_edits {
         let task = tasks.iter().find(|t| t.id == id).unwrap().clone();
         handle_set.spawn(async move {
-          let mut update: (Task, Vec<Action>) = (task, Vec::new());
+          let mut updates: (Task, Vec<Action>) = (task, Vec::new());
+          let mut destructive_update: Option<Action> = None;
           for m in mods {
             match m {
               Action::Edit(m_task) => {
                 let _ = edit_task(&m_task)
                   .await
                   .and_then(|res| { 
-                    update.0 = res.clone(); 
-                    update.1.push(Action::Edit(m_task.clone())); 
+                    updates.0 = res.clone(); 
+                    updates.1.push(Action::Edit(res.clone())); 
                     Ok(()) 
                   });
               },
-              Action::ToggleComplete => {
-                let _ = complete_task(id.clone()).await;
-                update.1.push(Action::ToggleComplete);
-              }
+              Action::ToggleComplete | Action::Remove => {
+                destructive_update = Some(m);
+              },
               Action::Reorder(o) => {
                 let _ = reorder_task(id.clone(), o.1).await;
-                update.1.push(Action::Reorder(o));
-              }
-              Action::Remove => {
-                let _ = remove_task(id.clone()).await;
-                update.1.push(Action::Remove);
-              }
+                updates.1.push(Action::Reorder(o));
+              },
               _ => {}
             }
           }
-          update
+          if let Some(u) = destructive_update {
+            if u == Action::Remove { 
+              let _ = remove_task(id.clone()).await;
+            } else {
+              let _ = complete_task(id.clone()).await;
+            }
+            updates.1.push(u)
+          }
+          updates
         });
       }
       let mut updates: Vec<(Task, Action)> = Vec::new();

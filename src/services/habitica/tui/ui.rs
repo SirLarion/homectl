@@ -7,8 +7,6 @@ use ratatui::{
     Frame,
 };
 
-use crate::services::habitica::types::Task;
-
 use super::{
   app::{Habitui, AppState}, 
   widgets::{grid::TaskGrid, editor::Editor}, 
@@ -30,18 +28,32 @@ fn render_footer(f: &mut Frame, area: Rect) {
     .border_type(BorderType::Rounded)
     .padding(Padding::horizontal(2));
 
-  f.render_widget(Paragraph::new("q: quit | hjkl: navigate | a: create task | e: edit task | space: mark completed | enter: submit edit")
+  f.render_widget(
+    Paragraph::new("\
+      q: quit | \
+      hjkl: navigate | \
+      a: create task | \
+      e: edit task | \
+      space: mark completed | \
+      d: mark for deletion | \
+      enter: submit edit\
+    ")
     .block(block), area);
+}
+
+fn calculate_editor_area(base_area: Rect) -> Rect {
+  let is_small = base_area.width < 180; 
+  Rect {
+      x: if is_small { base_area.width / 2 - 35 } else { base_area.width / 3 - 5 },
+      y: base_area.height / 3,
+      width: if is_small { 70 } else { base_area.width / 3 + 10 },
+      height: base_area.height / 2,
+  }
 }
 
 fn render_editor(f: &mut Frame, area: Rect, app: &mut Habitui) {
   let editor = Editor::new();
-  let popup_area = Rect {
-      x: area.width / 3 - 5,
-      y: area.height / 3,
-      width: area.width / 3 + 10,
-      height: area.height / 2,
-  };
+  let popup_area = calculate_editor_area(area);
 
   if let Some(state) = &mut app.editor_state {
     f.render_stateful_widget(editor, popup_area, state);

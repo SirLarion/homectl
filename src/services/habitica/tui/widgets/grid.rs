@@ -1,15 +1,14 @@
-use std::{
-  mem, 
+use std::{  mem, 
   collections::{HashSet, HashMap},
   cmp::max,
 };
 
 use crossterm::event::KeyEvent;
 use ratatui::{
-  widgets::{Widget, StatefulWidget, Paragraph, Block, Borders, Padding}, 
+  widgets::{Widget, StatefulWidget, Paragraph, Block, Padding}, 
   layout::{Rect, Layout, Constraint, Margin}, 
   buffer::Buffer,
-  style::{Style, Color, Styled}, text::Line
+  style::Style
 };
 
 use crate::services::habitica::{
@@ -190,18 +189,41 @@ impl TaskGridState {
 
   fn upsert_modified(&mut self, id: TaskId, modification: Action) {
     if let Some(diff) = self.modifications.get_mut(&id) {
-      if diff.contains(&modification) {
-        match modification {
-          Action::ToggleComplete => { diff.remove(&modification); },
-          Action::Remove         => { diff.remove(&modification); },
-                               _ => { diff.replace(modification); }
-        };
-        if diff.is_empty() {
-          self.modifications.remove(&id);
+      // Allow only one destructive modification
+      if modification.is_destructive() {
+        let destructive_set = HashSet::from([Action::ToggleComplete, Action::Remove]);
+        let diff_clone = diff.clone();
+
+        let m = diff_clone.intersection(&destructive_set).next();
+        if let Some(m) = m {
+          diff.remove(m);
+        } 
+        if m.is_none() || m != Some(&modification) {
+          diff.insert(modification);
         }
-        return;
+      } else {
+        match (&modification, diff.clone().get(&modification)) {
+          (Action::Reorder((_, i)), Some(Action::Reorder((original, _)))) => { 
+            if *original == *i {
+              diff.remove(&modification);
+            } else {
+              diff.replace(Action::Reorder((*original, *i)));
+            }
+            return;
+          },
+          (_, Some(Action::Edit(t))) => {
+            if self.task_items.contains(t) {
+              diff.remove(&modification); 
+              return;
+            }
+          },
+          _ => {}
+        }
+        diff.replace(modification);
       }
-      diff.replace(modification);
+      if diff.is_empty() {
+        self.modifications.remove(&id);
+      }
     } else {
       self.modifications.insert(id, HashSet::from([modification]));
     }
@@ -214,6 +236,18 @@ impl TaskGridState {
   fn get_selected_checklist(&self) -> Option<&Vec<SubTask>> {
     self.get_selected().and_then(|task| {
       task.checklist.as_ref().filter(|l| !l.is_empty())
+    })
+  }
+
+  fn get_line_offset_selected_sub(&self) -> Option<usize> {
+    self.selected_sub.map(|index| {
+      let mut i = index + 1;
+      let task = self.get_selected();
+      task.map(|t| {
+        t.notes.clone().map(|_| i += 1);
+        t.date.map(|_| i += 1);
+      });
+      i
     })
   }
 
@@ -300,8 +334,8 @@ impl StatefulWidget for TaskGrid {
           for (i, line_str) in rendered_task.to_string().split("\n").enumerate() {
             let mut line_style = style;
             let y = inner.y + i as u16;
-            if let Some(subtask_i) = state.selected_sub {
-              if is_selected && i.wrapping_sub(2) == subtask_i {
+            if let Some(subtask_i) = state.get_line_offset_selected_sub() {
+              if is_selected && i == subtask_i {
                 line_style = Style::default().bg(Palette::GREEN2.into());
               }
             }

@@ -5,6 +5,7 @@ use crate::error::AppError;
 
 mod util;
 mod types;
+mod request;
 use util::*; 
 
 #[cfg(feature = "tui")]
