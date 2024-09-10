@@ -1,2 +1,2 @@
-pub mod grid;
 pub mod editor;
+pub mod grid;
