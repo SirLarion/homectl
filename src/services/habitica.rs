@@ -26,6 +26,9 @@ pub enum Operation {
         /// <name>,<difficulty>,<notes>,<due>,<checklist1>;<checklist2>;...
         descriptor: Option<String>,
     },
+
+    /// Reorder tasks by descending priority
+    Reorder,
 }
 
 pub fn run_service(operation: Option<Operation>) -> Result<(), AppError> {
@@ -41,6 +44,7 @@ pub fn run_service(operation: Option<Operation>) -> Result<(), AppError> {
     let handle = match operation {
         Some(Operation::List { save_json }) => runtime.spawn(list_tasks(save_json)),
         Some(Operation::Task { descriptor }) => runtime.spawn(create_task(descriptor)),
+        Some(Operation::Reorder) => runtime.spawn(priority_reorder_tasks()),
         None =>
         {
             #[cfg(feature = "tui")]

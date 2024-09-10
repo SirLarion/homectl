@@ -79,8 +79,6 @@ pub async fn reorder_task(task_id: TaskId, index: usize) -> Result<(), AppError>
     let mut iter = tasks.iter_mut();
     let i_old = iter.position(|t| t.id == task_id).unwrap();
     let task = tasks.remove(i_old);
-    // .and_then(|i| Some(tasks.remove(i)))
-    // .ok_or(AppError::ServiceError(format!("Task with ID: {task_id} not found")))?;
 
     tasks.insert(index, task);
     let mut file = File::create(&path)?;

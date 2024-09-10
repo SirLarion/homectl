@@ -7,7 +7,8 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use time::{format_description::well_known::Iso8601, OffsetDateTime};
 
-use super::types::{Difficulty, SubTask, Task, TaskId};
+use super::request::reorder_task;
+use super::types::{Difficulty, Priority, SubTask, Task, TaskId};
 use crate::util::build_config_path;
 use crate::{
     error::AppError,
@@ -198,6 +199,30 @@ pub async fn list_tasks(save_json: bool) -> Result<(), AppError> {
         let mut file = File::create(get_json_path()?)?;
         file.write_all(raw_tasks.as_bytes())?;
         println!("\nSaved list to ~/.config/habitica_tasks.json");
+    }
+
+    Ok(())
+}
+
+pub async fn priority_reorder_tasks() -> Result<(), AppError> {
+    let tasks = get_task_list().await?;
+    let mut prev_high_priority = 0;
+    let mut prev_mid_priority = 0;
+
+    for task in tasks {
+        let prio = task.get_priority();
+        match prio {
+            Priority::LOW => {}
+            Priority::MID => {
+                reorder_task(task.id, prev_mid_priority).await?;
+                prev_mid_priority += 1;
+            }
+            Priority::HIGH => {
+                reorder_task(task.id, prev_high_priority).await?;
+                prev_high_priority += 1;
+                prev_mid_priority += 1;
+            }
+        }
     }
 
     Ok(())

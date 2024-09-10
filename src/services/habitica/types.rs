@@ -5,6 +5,7 @@ use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
+use time::Duration;
 use time::{format_description::well_known::Iso8601, OffsetDateTime};
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -13,6 +14,13 @@ pub enum Difficulty {
     EASY,
     MEDIUM,
     HARD,
+}
+
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum Priority {
+    LOW,
+    MID,
+    HIGH,
 }
 
 impl fmt::Display for Difficulty {
@@ -210,6 +218,30 @@ impl fmt::Display for Task {
             }
         }
         write!(f, "\n")
+    }
+}
+
+impl Task {
+    pub fn get_priority(&self) -> Priority {
+        if self.notes.as_ref().is_some_and(|n| n.contains("🎓")) {
+            return Priority::MID;
+        }
+
+        // Due date is within the next week
+        let is_expiring = self.date.is_some_and(|d| {
+            OffsetDateTime::now_utc()
+                .checked_add(Duration::weeks(1))
+                .is_some_and(|wk| d < wk)
+        });
+
+        // 🔥 to communicate priority in other cases
+        let is_fire = self.notes.as_ref().is_some_and(|n| n.contains("🔥"));
+
+        if is_expiring || is_fire {
+            return Priority::HIGH;
+        };
+
+        return Priority::LOW;
     }
 }
 
