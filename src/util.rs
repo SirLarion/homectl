@@ -7,8 +7,6 @@ use crate::{error::AppError, types::Service};
 
 #[cfg(feature = "git")]
 use Service::Git;
-#[cfg(feature = "habitica")]
-use Service::Habitica;
 #[cfg(feature = "minecraft")]
 use Service::Minecraft;
 
@@ -73,11 +71,6 @@ pub fn assert_correct_permissions(service: &Service) -> Result<(), AppError> {
             if user == "git" {
                 return Ok(());
             }
-        }
-
-        #[cfg(feature = "habitica")]
-        Habitica { .. } => {
-            return Ok(());
         }
     }
     Err(AppError::AclError(

@@ -14,7 +14,6 @@ dotenv = "0.15.0"
 itertools = "0.12.1"
 log = { version = "0.4.20", features = ["std"] }
 nix = { version = "0.27.1", features = ["user"] }
-ratatui = { version = "0.28", optional = true, features = ["widget-calendar"] }
 reqwest = { version = "0.11.24", features = ["blocking", "json"] }
 serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.114"
@@ -22,14 +21,8 @@ thiserror = "1.0.57"
 inquire = { version = "0.7.1", features = ["date"] }
 tokio = { version = "1.39.2", features = ["macros", "rt-multi-thread"] }
 futures = "0.3.30"
-tui-textarea = { version = "0.6.1", optional = true, features = ["ratatui"] }
-time = { version = "0.3.36", features = ["serde", "parsing", "formatting", "macros"] }
-chrono = "0.4.38"
 
 [features]
-default = ["minecraft", "git", "habitica", "tui"]
+default = ["minecraft", "git"]
 minecraft = []
 git = []
-habitica = []
-dark-mode = []
-tui = ["dep:ratatui", "tui-textarea"]

@@ -36,11 +36,6 @@ fn main() -> Result<(), AppError> {
 
                 #[cfg(feature = "git")]
                 Git { operation } => services::git::run_service(operation)?,
-
-                #[cfg(feature = "habitica")]
-                Habitica { operation } => {
-                    services::habitica::run_service(operation)?;
-                }
             }
         }
         None => {}

@@ -6,9 +6,6 @@ use crate::services::minecraft;
 #[cfg(feature = "git")]
 use crate::services::git;
 
-#[cfg(feature = "habitica")]
-use crate::services::habitica;
-
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(next_line_help = true)]
@@ -39,12 +36,5 @@ pub enum Service {
     Git {
         #[command(subcommand)]
         operation: Option<git::Operation>,
-    },
-
-    /// operate on Habitica functions
-    #[cfg(feature = "habitica")]
-    Habitica {
-        #[command(subcommand)]
-        operation: Option<habitica::Operation>,
     },
 }
